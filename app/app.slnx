@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/api/">
+    <Project Path="api/src/src.csproj" />
+    <Project Path="api/tests/tests.csproj" />
+  </Folder>
+  <Folder Name="/email-worker/">
+    <Project Path="email-worker/src/src.csproj" />
+    <Project Path="email-worker/tests/tests.csproj" />
+  </Folder>
+  <Folder Name="/sms-worker/">
+    <Project Path="sms-worker/src/src.csproj" />
+    <Project Path="sms-worker/tests/tests.csproj" />
+  </Folder>
+</Solution>
