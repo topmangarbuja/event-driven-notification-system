@@ -1,0 +1,2 @@
+# Ignore the .idea directory, which contains project-specific settings for JetBrains IDEs
+.idea/
