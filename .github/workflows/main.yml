@@ -28,15 +28,11 @@ jobs:
           dotnet-version: 10.0.300
       - name: Restore dependencies
         run: dotnet restore
-      - name: Build API
-        run: dotnet build ./api/src --no-restore
+      - name: Build all src and tests projects
+        run: dotnet build --no-restore
       - name: Test API
         run: dotnet test ./api/tests --no-build --verbosity normal
-      - name: Build Email Worker
-        run: dotnet build ./email-worker/src --no-restore
       - name: Test Email Worker
         run: dotnet test ./email-worker/tests --no-build --verbosity normal
-      - name: Build Sms Worker
-        run: dotnet build ./sms-worker/src --no-restore
       - name: Test Sms Worker
         run: dotnet test ./sms-worker/tests --no-build --verbosity normal
