@@ -9,7 +9,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 # Install pnpm globally (the project's package manager)
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10.18.1
 
 # Copy dependency manifests first to leverage Docker layer caching
 COPY package.json pnpm-lock.yaml ./

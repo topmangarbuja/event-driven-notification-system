@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 22.20.0
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: npm install -g pnpm@10.18.1
       - name: Install UI dependencies
         run: pnpm install --frozen-lockfile
       - name: Lint UI
