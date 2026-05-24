@@ -17,6 +17,9 @@ COPY package.json pnpm-lock.yaml ./
 # Install dependencies with a frozen lockfile for reproducible builds
 RUN pnpm install --frozen-lockfile
 
+# Copy all the source code
+COPY . .
+
 # Build the static assets (output goes to /app/dist)
 RUN pnpm run build
 
