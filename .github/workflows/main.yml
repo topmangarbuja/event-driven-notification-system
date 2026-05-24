@@ -52,4 +52,10 @@ jobs:
       - name: Deploy API
         run: railway up --service=${{ secrets.RAILWAY_API_SERVICE_ID }} -c
         working-directory: ./app/api/src
+      - name: Deploy Email Worker
+        run: railway up --service=${{ secrets.RAILWAY_EMAIL_WORKER_SERVICE_ID }} -c
+        working-directory: ./app/email-worker/src
+      - name: Deploy Sms Worker
+        run: railway up --service=${{ secrets.RAILWAY_SMS_WORKER_SERVICE_ID }} -c
+        working-directory: ./app/sms-worker/src
       
