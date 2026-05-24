@@ -72,6 +72,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Railway CLI
         run: npm install -g @railway/cli
+      - name: Deploy UI
+        run: railway up --service=${{ secrets.RAILWAY_UI_SERVICE_ID }} -c
+        working-directory: ./app/ui
       - name: Deploy API
         run: railway up --service=${{ secrets.RAILWAY_API_SERVICE_ID }} -c
         working-directory: ./app/api/src
@@ -81,7 +84,4 @@ jobs:
       - name: Deploy Sms Worker
         run: railway up --service=${{ secrets.RAILWAY_SMS_WORKER_SERVICE_ID }} -c
         working-directory: ./app/sms-worker/src
-      - name: Deploy UI
-        run: railway up --service=${{ secrets.RAILWAY_UI_SERVICE_ID }} -c
-        working-directory: ./app/ui
       
