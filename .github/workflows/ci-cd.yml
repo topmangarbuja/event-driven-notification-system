@@ -1,14 +1,15 @@
 # This workflow will build a .NET project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
 
-name: Build, Test & Deploy Apps
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ "main" ]
     paths:
       - "app/**"
-      - ".github/workflows/apps.yml"
+      - ".github/workflows/ci-cd.yml"
+      - "e2e/**"
       - "!**/*.md"
       - "!**/*.gitignore"
       - "!**/docker-compose.yml"
@@ -60,8 +61,8 @@ jobs:
       - name: Test Sms Worker
         run: dotnet test ./sms-worker/tests --no-build --verbosity normal
 
-  deploy:
-    name: Deploy to Railway
+  deploy-development:
+    name: Deploy to Development Environment
     runs-on: ubuntu-latest
     needs: [build-ui, build-backend]
     environment: development
@@ -84,4 +85,29 @@ jobs:
       - name: Deploy Sms Worker
         run: railway up --service=${{ secrets.RAILWAY_SMS_WORKER_SERVICE_ID }} -c
         working-directory: ./app/sms-worker/src
-      
+
+  e2e-test:
+    name: Run Playwright E2E Tests
+    runs-on: ubuntu-latest
+    needs: deploy-development
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm install -g pnpm@10.18.1 && pnpm install
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+      - name: Run Playwright tests
+        run: pnpm exec playwright test
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
