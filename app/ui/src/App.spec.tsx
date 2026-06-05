@@ -6,11 +6,11 @@ describe('App Component', () => {
     it('should render all form fields and the submit button', async() => {
         render(<App />);
 
-        expect(screen.getByLabelText('Full name')).toBeTruthy();
-        expect(screen.getByLabelText('Message')).toBeTruthy();
-        expect(screen.getByLabelText('Phone number')).toBeTruthy();
-        expect(screen.getByLabelText('Email address')).toBeTruthy();
-        expect(screen.getByText('Confirm')).toBeTruthy();
+        expect(screen.getByLabelText('Full name')).toBeInTheDocument();
+        expect(screen.getByLabelText('Message')).toBeInTheDocument();
+        expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
+        expect(screen.getByLabelText('Email address')).toBeInTheDocument();
+        expect(screen.getByText('Confirm')).toBeInTheDocument();
     });
 
     it('should POST form data to /api/messages on Confirm click', async() => {
