@@ -1,4 +1,3 @@
-import {describe, it, expect, vi} from 'vitest';
 import App from "./App.tsx";
 import {render, fireEvent, screen} from "@testing-library/react";
 
