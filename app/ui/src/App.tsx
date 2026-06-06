@@ -10,7 +10,7 @@ function App() {
         phoneNumber: "",
         email: ""
     });
-    const [sentSuccessfully, setSentSuccessfully] = useState(true);
+    const [sentSuccessfully, setSentSuccessfully] = useState(false);
 
     // Handlers
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,7 +40,7 @@ function App() {
         const timer = setTimeout(()=> setSentSuccessfully(false), 3000);
 
         return () => clearTimeout(timer);
-    }, [setSentSuccessfully]);
+    }, [sentSuccessfully]);
 
     // Content
     let successMessage = null;

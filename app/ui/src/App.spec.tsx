@@ -1,5 +1,5 @@
 import App from "./App.tsx";
-import {render, fireEvent, screen} from "@testing-library/react";
+import {render, fireEvent, screen, act} from "@testing-library/react";
 
 const renderApp = () =>
     render(<App />);
@@ -56,7 +56,10 @@ describe('App Component', () => {
         fireEvent.input(screen.getByLabelText('Phone number'), {target: {value: '0411222333'}});
         fireEvent.input(screen.getByLabelText('Email address'), {target: {value: 'example@gmail.com'}});
 
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+        // ensures all updates have been processed and applied to the DOM
+        await act(async()=>{
+            fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+        });
 
         expect(screen.getByText('Message sent successfully.')).toBeInTheDocument();
     });
@@ -74,11 +77,19 @@ describe('App Component', () => {
         fireEvent.input(screen.getByLabelText('Phone number'), {target: {value: '0411222333'}});
         fireEvent.input(screen.getByLabelText('Email address'), {target: {value: 'example@gmail.com'}});
 
-        fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+        expect(screen.queryByText('Message sent successfully.')).not.toBeInTheDocument();
+
+        // ensures all updates have been processed and applied to the DOM
+        await act(async() => {
+            fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+        });
 
         expect(screen.getByText('Message sent successfully.')).toBeInTheDocument();
 
-        await vi.advanceTimersByTimeAsync(3_000);
+        // ensures all updates have been processed and applied to the DOM
+        act(() => {
+            vi.advanceTimersByTime(3_000);
+        });
 
         expect(screen.queryByText('Message sent successfully.')).not.toBeInTheDocument();
     });
