@@ -1,9 +1,12 @@
 import App from "./App.tsx";
 import {render, fireEvent, screen} from "@testing-library/react";
 
+const renderApp = () =>
+    render(<App />);
+
 describe('App Component', () => {
     it('should render all form fields and the submit button', async() => {
-        render(<App />);
+        renderApp();
 
         expect(screen.getByLabelText('Full name')).toBeInTheDocument();
         expect(screen.getByLabelText('Message')).toBeInTheDocument();
@@ -13,11 +16,11 @@ describe('App Component', () => {
     });
 
     it('should POST form data to /api/messages on Confirm click', async() => {
+        renderApp();
+
         const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
             ok: true
          } as Response);
-
-        render(<App />);
 
         fireEvent.input(screen.getByLabelText('Full name'), {target: {value: 'John Doe'}});
         fireEvent.input(screen.getByLabelText('Message'), {target: {value: 'Your order 10115 has been delivered successfully.'}});
@@ -39,5 +42,22 @@ describe('App Component', () => {
                 }),
             }
         );
+    });
+
+    it('should show success message on successful submission', async() => {
+        renderApp();
+
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+            ok: true
+        } as Response);
+
+        fireEvent.input(screen.getByLabelText('Full name'), {target: {value: 'John Doe'}});
+        fireEvent.input(screen.getByLabelText('Message'), {target: {value: 'Your order 10115 has been delivered successfully.'}});
+        fireEvent.input(screen.getByLabelText('Phone number'), {target: {value: '0411222333'}});
+        fireEvent.input(screen.getByLabelText('Email address'), {target: {value: 'example@gmail.com'}});
+
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+        expect(screen.getByText('Message sent successfully.')).toBeInTheDocument();
     });
 })

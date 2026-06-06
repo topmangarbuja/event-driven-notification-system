@@ -11,6 +11,8 @@ function App() {
         email: ""
     });
 
+    const [sentSuccessfully, setSentSuccessfully] = useState(true);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     }
@@ -18,13 +20,22 @@ function App() {
     async function submit(event: React.SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        await fetch('/api/messages', {
+        const response = await fetch('/api/messages', {
             method: "POST",
             body: JSON.stringify(form),
             headers: {
                 "Content-Type": "application/json"
             }
         });
+
+        if(response.ok){
+            setSentSuccessfully(true);
+        }
+    }
+
+    let successMessage = null;
+    if (sentSuccessfully) {
+        successMessage = <p className="mt-2 text-green-700">Message sent successfully.</p>;
     }
 
     return (
@@ -65,6 +76,8 @@ function App() {
                 </div>
                 <button type="submit" className="bg-blue-500 p-2 text-white">Confirm</button>
             </form>
+
+            {successMessage}
         </div>
     )
 }
