@@ -1,6 +1,8 @@
-﻿namespace tests;
+﻿using Microsoft.AspNetCore.Mvc.Testing;
 
-public class UnitTest1
+namespace tests;
+
+public class UnitTest1: IClassFixture<WebApplicationFactory<Program>>
 {
     [Fact]
     public void Test1()
