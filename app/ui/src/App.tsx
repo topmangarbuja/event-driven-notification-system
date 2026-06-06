@@ -1,18 +1,18 @@
-import './App.css'
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import * as React from "react";
 
 function App() {
 
+    // States
     const [form, setForm] = useState({
         fullName: "",
         message: "",
         phoneNumber: "",
         email: ""
     });
-
     const [sentSuccessfully, setSentSuccessfully] = useState(true);
 
+    // Handlers
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     }
@@ -33,11 +33,22 @@ function App() {
         }
     }
 
+    // Effects
+    useEffect(() => {
+        if(!sentSuccessfully) return;
+
+        const timer = setTimeout(()=> setSentSuccessfully(false), 3000);
+
+        return () => clearTimeout(timer);
+    }, [setSentSuccessfully]);
+
+    // Content
     let successMessage = null;
     if (sentSuccessfully) {
         successMessage = <p className="mt-2 text-green-700">Message sent successfully.</p>;
     }
 
+    // Render
     return (
         <div className="flex flex-col items-center mt-5">
             <h1 className="text-2xl font-semibold text-gray-900">Send message</h1>

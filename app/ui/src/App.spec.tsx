@@ -60,4 +60,26 @@ describe('App Component', () => {
 
         expect(screen.getByText('Message sent successfully.')).toBeInTheDocument();
     });
+
+    it('should hide success message on successful submission after 3 seconds', async () => {
+        vi.useFakeTimers();
+        renderApp();
+
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+            ok: true
+        } as Response);
+
+        fireEvent.input(screen.getByLabelText('Full name'), {target: {value: 'John Doe'}});
+        fireEvent.input(screen.getByLabelText('Message'), {target: {value: 'Your order 10115 has been delivered successfully.'}});
+        fireEvent.input(screen.getByLabelText('Phone number'), {target: {value: '0411222333'}});
+        fireEvent.input(screen.getByLabelText('Email address'), {target: {value: 'example@gmail.com'}});
+
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+        expect(screen.getByText('Message sent successfully.')).toBeInTheDocument();
+
+        await vi.advanceTimersByTimeAsync(3_000);
+
+        expect(screen.queryByText('Message sent successfully.')).not.toBeInTheDocument();
+    });
 })
