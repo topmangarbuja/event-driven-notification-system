@@ -14,7 +14,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapPost("/api/send-messages", (SendMessagesRequest request) =>
+app.MapPost("/api/messages", (SendMessagesRequest request) =>
 {
     // Here you would typically handle the incoming message, e.g., save it to a database or send it to another service.
     // For this example, we'll just return a success response.

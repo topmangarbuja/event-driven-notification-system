@@ -11,7 +11,7 @@ public class SendMessagesIntegrationTest(WebApplicationFactory<Program> factory)
     public async Task SendMessages_WithValidRequests_ReturnsOK()
     {
         // Arrange
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/send-messages");
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/messages");
         request.Content = JsonContent.Create(new SendMessagesRequest(
             FullName: "John Doe",
             Message: "Hello, this is a test message.",
