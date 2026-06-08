@@ -93,6 +93,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy-development
     timeout-minutes: 60
+    env:
+        E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+        CI: true
     defaults:
       run:
         working-directory: e2e
