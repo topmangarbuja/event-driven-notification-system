@@ -75,7 +75,7 @@ jobs:
         run: npm install -g @railway/cli
       - name: Deploy UI
         run: |
-          sed -i "s|${API_URL}|${{ vars.API_URL }}|g" nginx.conf.template
+          sed -i "s|\${API_URL}|${{ vars.API_URL }}|g" nginx.conf.template
           railway up --service=${{ secrets.RAILWAY_UI_SERVICE_ID }} -c
         working-directory: ./app/ui
       - name: Deploy API
