@@ -34,5 +34,8 @@ FROM nginx:1.31.1-alpine-slim AS runtime
 # Copy the built assets from the build stage into nginx's html directory
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# Copy nginx.conf.template (substituted by CI/CD) to nginx configuration directory
+COPY nginx.conf.template /etc/nginx/conf.d/default.conf
+
 # Expose port 80 (nginx default)
 EXPOSE 80
