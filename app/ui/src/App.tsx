@@ -7,7 +7,7 @@ function App() {
     const [form, setForm] = useState({
         fullName: "",
         message: "",
-        phoneNumber: "",
+        mobile: "",
         email: ""
     });
     const [sentSuccessfully, setSentSuccessfully] = useState(false);
@@ -71,11 +71,11 @@ function App() {
                            placeholder="Your order 10115 has been delivered successfully." required/>
                 </div>
                 <div>
-                    <label htmlFor="phone" className="block font-medium">Phone number</label>
-                    <input type="tel" id="phone"
+                    <label htmlFor="mobile" className="block font-medium">Mobile</label>
+                    <input type="tel" id="mobile"
                            className="border rounded-xl p-2 min-w-2xs"
-                           value={form.phoneNumber}
-                           onChange={handleChange} name="phoneNumber"
+                           value={form.mobile}
+                           onChange={handleChange} name="mobile"
                            placeholder="04xxxxxxxx" pattern="[04]{2}[0-9]{8}" required/>
                 </div>
                 <div className="mb-6">
@@ -85,7 +85,7 @@ function App() {
                            value={form.email} onChange={(e) => setForm({...form, email: e.target.value})}
                            placeholder="john.doe@company.com" required/>
                 </div>
-                <button type="submit" className="bg-blue-500 p-2 text-white">Confirm</button>
+                <button type="submit" className="bg-blue-500 p-2 text-white">Send</button>
             </form>
 
             {successMessage}
