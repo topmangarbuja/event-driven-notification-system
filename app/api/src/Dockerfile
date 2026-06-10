@@ -30,5 +30,7 @@ COPY --from=build /src/out .
 # Expose port 8080
 EXPOSE 8080
 
+ENV ASPNETCORE_URLS=http://+:8080
+
 # Start the application
 ENTRYPOINT ["dotnet", "src.dll"]
