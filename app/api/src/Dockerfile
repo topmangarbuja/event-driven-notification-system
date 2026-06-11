@@ -28,11 +28,10 @@ WORKDIR /app
 COPY --from=build /src/out .
 
 # Set the environment variable to listen on port 8080
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080;http://[::]:8080
 
 # Expose port 8080
 EXPOSE 8080
-
 
 # Start the application
 ENTRYPOINT ["dotnet", "src.dll"]
