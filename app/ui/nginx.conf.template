@@ -10,7 +10,17 @@ server {
     }
 
     location /api {
-        proxy_pass ${API_URL};
+        # Variable in proxy_pass forces runtime DNS re-resolution.
+        # Without this, nginx resolves given ${API_BACKEND_HOST} only at startup and caches it forever.
+
+        # Railway's internal DNS resolver (platform-specific). Replace if deploying elsewhere.
+        resolver [fd12::10] valid=10s;
+
+        # set variable
+        set $api_backend_host ${API_BACKEND_HOST};
+
+        # Route the request using the variable to force re-resolution
+        proxy_pass http://$api_backend_host:8080;
 
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
