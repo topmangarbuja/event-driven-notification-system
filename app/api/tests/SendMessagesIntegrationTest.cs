@@ -23,6 +23,6 @@ public class SendMessagesIntegrationTest(WebApplicationFactory<Program> factory)
         var response = await _client.SendAsync(request);
 
         // Assert
-        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }
