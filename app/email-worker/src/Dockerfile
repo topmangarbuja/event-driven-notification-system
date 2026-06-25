@@ -27,8 +27,5 @@ WORKDIR /app
 # Copy the published output from the build stage into the runtime image
 COPY --from=build /src/out .
 
-# Expose port 8080
-EXPOSE 8080
-
 # Start the application
 ENTRYPOINT ["dotnet", "src.dll"]
