@@ -1,3 +1,7 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
+using RabbitMQ.Client;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -14,10 +18,30 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapPost("/api/messages", (SendMessagesRequest request) =>
+var factory = new ConnectionFactory()
 {
-    // Here you would typically handle the incoming message, e.g., save it to a database or send it to another service.
-    // For this example, we'll just return a success response.
+    HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST")!,
+    Port     = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT")!),
+    UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER")!,
+    Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS")!
+};
+
+var connection = await factory.CreateConnectionAsync();
+var channel = await connection.CreateChannelAsync();
+
+const string exchange = "message.submitted";
+// declare exchange
+await channel.ExchangeDeclareAsync(exchange: exchange, type: ExchangeType.Fanout);
+
+app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, ILogger<Program> logger) =>
+{
+    var body = JsonSerializer.SerializeToUtf8Bytes(request);
+    await channel.BasicPublishAsync(exchange: exchange, 
+        routingKey: string.Empty, 
+        body: body);
+    
+    logger.LogInformation("Message sent to exchange {exchange}: {message}", exchange, request);
+    
     return Results.Ok();
 });
 
