@@ -56,3 +56,12 @@ The UI starts at `http://localhost:5173`. Open it in your browser, fill in the f
 ### Verify
 
 Look at the console logs of the API and workers to confirm messages are being published and processed.
+
+## Possible Enhancements
+
+- **Persistent delivery mode** — messages are not marked as persistent; a RabbitMQ restart loses them
+- **Retry & dead-lettering** — both workers have a `TODO` for retry logic and DLQ for failed messages
+- **Connection resilience** — API and workers create a single connection at startup with no reconnection if RabbitMQ goes down
+- **API validation** — no input validation or error responses beyond a 200 OK
+- **UI error handling** — only checks `response.ok`; no loading state, no error display
+- **OpenTelemetry** — distributed tracing across API and workers for observability
