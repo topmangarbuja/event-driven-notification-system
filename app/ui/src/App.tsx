@@ -4,7 +4,7 @@ import * as React from "react";
 function App() {
 
     // States
-    const [form, setForm] = useState({
+    const [form, setForm] = useState<MessageRequest>({
         fullName: "",
         message: "",
         mobile: "",
@@ -82,7 +82,7 @@ function App() {
                     <label htmlFor="email" className="block font-medium">Email address</label>
                     <input type="email" id="email"
                            className="border rounded-xl p-2 min-w-2xs"
-                           value={form.email} onChange={(e) => setForm({...form, email: e.target.value})}
+                           value={form.email} onChange={handleChange} name="email"
                            placeholder="john.doe@company.com" required/>
                 </div>
                 <button type="submit" className="bg-blue-500 p-2 text-white">Send</button>
@@ -94,3 +94,10 @@ function App() {
 }
 
 export default App
+
+export interface MessageRequest{
+    fullName: string;
+    message: string;
+    email: string;
+    mobile: string;
+}
