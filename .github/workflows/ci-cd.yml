@@ -117,3 +117,30 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report/
           retention-days: 30
+
+  deploy-production:
+    name: Deploy to Production Environment
+    runs-on: ubuntu-latest
+    needs: e2e-test
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy UI
+        run: |
+          sed -i "s|\${API_BACKEND_HOST}|${{ vars.API_BACKEND_HOST }}|g" nginx.conf.template
+          railway up --service=${{ secrets.RAILWAY_UI_SERVICE_ID }} -c
+        working-directory: ./app/ui
+      - name: Deploy API
+        run: railway up --service=${{ secrets.RAILWAY_API_SERVICE_ID }} -c
+        working-directory: ./app/api/src
+      - name: Deploy Email Worker
+        run: railway up --service=${{ secrets.RAILWAY_EMAIL_WORKER_SERVICE_ID }} -c
+        working-directory: ./app/email-worker/src
+      - name: Deploy Sms Worker
+        run: railway up --service=${{ secrets.RAILWAY_SMS_WORKER_SERVICE_ID }} -c
+        working-directory: ./app/sms-worker/src
