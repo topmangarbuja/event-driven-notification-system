@@ -1,6 +1,32 @@
 # rabbitmq-demo
 
-A .NET 10 demo application using RabbitMQ for message brokering with an API, email/SMS workers, and a React UI.
+> [!NOTE]
+> This is a **learning/demo project** showcasing RabbitMQ messaging patterns with .NET.
+> See [Possible Enhancements](#possible-enhancements) for known gaps and planned improvements.
+
+A **learning-oriented** .NET 10 demo application using RabbitMQ for message brokering with an API, email/SMS workers, and a React UI.
+
+```mermaid
+flowchart LR
+    UI["UI (React)"]
+    API("API (.NET)")
+    
+    subgraph  RabbitMQ 
+        Exchange{{Fanout Exchange}}
+        EmailQueue[[Email Queue]]
+        SmsQueue[[Sms Queue]]   
+    end
+
+    Worker1("Email Worker (.NET): Console logging as 'Email sent'")
+    Worker2("SMS Worker (.NET): Console logging as 'SMS sent'")
+    
+    UI --> API
+    API --> Exchange
+    Exchange --> EmailQueue
+    Exchange --> SmsQueue
+    EmailQueue --> Worker1
+    SmsQueue --> Worker2
+```
 
 ## Prerequisites
 
