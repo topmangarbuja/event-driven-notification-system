@@ -73,8 +73,8 @@ dotnet run
 
 ```bash
 cd app/ui
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 The UI starts at `http://localhost:5173`. Open it in your browser, fill in the form, and submit a message.
