@@ -83,6 +83,39 @@ The UI starts at `http://localhost:5173`. Open it in your browser, fill in the f
 
 Look at the console logs of the API and workers to confirm messages are being published and processed.
 
+## Running Tests Locally
+
+### Backend (unit & integration)
+
+```bash
+# Run all backend tests
+cd app
+dotnet test
+
+# Or run individually
+cd app/api/tests && dotnet test
+cd app/email-worker/tests && dotnet test
+cd app/sms-worker/tests && dotnet test
+```
+
+Requires Docker — the integration tests use Testcontainers to spin up a real RabbitMQ instance.
+
+### UI
+
+```bash
+cd app/ui
+pnpm test
+```
+
+### End-to-End
+
+```bash
+cd e2e
+pnpm test
+```
+
+Requires the app to be running locally.
+
 ## Possible Enhancements
 
 - **Persistent delivery mode** — messages are not marked as persistent; a RabbitMQ restart loses them
