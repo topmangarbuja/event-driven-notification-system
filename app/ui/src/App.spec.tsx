@@ -93,4 +93,20 @@ describe('App Component', () => {
 
         expect(screen.queryByText('Message sent successfully.')).not.toBeInTheDocument();
     });
+
+    it('should fill form with sample data when "Fill with sample data" is clicked', async () => {
+        renderApp();
+
+        expect(screen.getByLabelText('Full name')).toHaveValue('');
+        expect(screen.getByLabelText('Message')).toHaveValue('');
+        expect(screen.getByLabelText('Mobile')).toHaveValue('');
+        expect(screen.getByLabelText('Email address')).toHaveValue('');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Fill with sample data' }));
+
+        expect(screen.getByLabelText('Full name')).not.toHaveValue('');
+        expect(screen.getByLabelText('Message')).not.toHaveValue('');
+        expect(screen.getByLabelText('Mobile')).not.toHaveValue('');
+        expect(screen.getByLabelText('Email address')).not.toHaveValue('');
+    });
 })

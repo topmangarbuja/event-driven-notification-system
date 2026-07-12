@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import * as React from "react";
+import {faker} from "@faker-js/faker";
 
 function App() {
 
@@ -55,6 +56,17 @@ function App() {
         );
     }
 
+    function fillForm() {
+        const fakeMessage: MessageRequest = {
+            fullName: faker.person.fullName(),
+            message: faker.lorem.sentence(),
+            mobile: faker.helpers.fromRegExp(/^04[0-9]{8}$/),
+            email: faker.internet.email()
+        };
+
+        setForm(fakeMessage);
+    }
+
     // Render
     return (
         <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
@@ -94,7 +106,8 @@ function App() {
                                value={form.email} onChange={handleChange} name="email"
                                placeholder="john.doe@company.com" required/>
                     </div>
-                    <button type="submit" className="mt-2 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:bg-blue-800">Send</button>
+                    <button type="button" className="cursor-pointer text-sm font-medium text-blue-600 underline hover:text-blue-800" onClick={fillForm}>Fill with sample data</button>
+                    <button type="submit" className="cursor-pointer mt-2 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:bg-blue-800">Send</button>
                 </form>
 
                 {successMessage}
