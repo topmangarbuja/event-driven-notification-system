@@ -13,7 +13,7 @@ function App() {
     const [sentSuccessfully, setSentSuccessfully] = useState(false);
 
     // Handlers
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     }
 
@@ -45,50 +45,60 @@ function App() {
     // Content
     let successMessage = null;
     if (sentSuccessfully) {
-        successMessage = <p className="mt-2 text-green-700">Message sent successfully.</p>;
+        successMessage = (
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-green-50 px-4 py-3 text-green-700 ring-1 ring-green-200">
+                <svg className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm font-medium">Message sent successfully.</span>
+            </div>
+        );
     }
 
     // Render
     return (
-        <div className="flex flex-col items-center mt-5">
-            <h1 className="text-2xl font-semibold text-gray-900">Send message</h1>
-            <br />
-            <form onSubmit={submit} className="flex flex-col gap-4">
-                <div>
-                    <label htmlFor="fullName" className="block font-medium">Full name</label>
-                    <input type="text" id="fullName"
-                           name="fullName"
-                           className="border rounded-xl p-2 min-w-2xs"
-                           value={form.fullName} onChange={handleChange}
-                           placeholder="John Doe" required/>
-                </div>
-                <div>
-                    <label htmlFor="company" className="block font-medium">Message</label>
-                    <input type="text" id="company"
-                           name="message"
-                           className="border rounded-xl p-2 min-w-2xs"
-                           value={form.message} onChange={handleChange}
-                           placeholder="Your order 10115 has been delivered successfully." required/>
-                </div>
-                <div>
-                    <label htmlFor="mobile" className="block font-medium">Mobile</label>
-                    <input type="tel" id="mobile"
-                           className="border rounded-xl p-2 min-w-2xs"
-                           value={form.mobile}
-                           onChange={handleChange} name="mobile"
-                           placeholder="04xxxxxxxx" pattern="[04]{2}[0-9]{8}" required/>
-                </div>
-                <div className="mb-6">
-                    <label htmlFor="email" className="block font-medium">Email address</label>
-                    <input type="email" id="email"
-                           className="border rounded-xl p-2 min-w-2xs"
-                           value={form.email} onChange={handleChange} name="email"
-                           placeholder="john.doe@company.com" required/>
-                </div>
-                <button type="submit" className="bg-blue-500 p-2 text-white">Send</button>
-            </form>
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-gray-900/5">
+                <h1 className="mb-6 text-center text-2xl font-semibold tracking-tight text-gray-900">Send message</h1>
+                <form onSubmit={submit} className="flex flex-col gap-5">
+                    <div>
+                        <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-gray-700">Full name</label>
+                        <input type="text" id="fullName"
+                               name="fullName"
+                               className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               value={form.fullName} onChange={handleChange}
+                               placeholder="John Doe" required/>
+                    </div>
+                    <div>
+                        <label htmlFor="message" className="mb-1.5 block text-sm font-medium text-gray-700">Message</label>
+                        <textarea id="message"
+                               name="message"
+                               rows={2}
+                               className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               value={form.message}
+                                  onChange={handleChange}
+                                  placeholder="Your order 10115 has been delivered successfully." required></textarea>
+                    </div>
+                    <div>
+                        <label htmlFor="mobile" className="mb-1.5 block text-sm font-medium text-gray-700">Mobile</label>
+                        <input type="tel" id="mobile"
+                               className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               value={form.mobile}
+                               onChange={handleChange} name="mobile"
+                               placeholder="04xxxxxxxx" pattern="[04]{2}[0-9]{8}" required/>
+                    </div>
+                    <div>
+                        <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-gray-700">Email address</label>
+                        <input type="email" id="email"
+                               className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               value={form.email} onChange={handleChange} name="email"
+                               placeholder="john.doe@company.com" required/>
+                    </div>
+                    <button type="submit" className="mt-2 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:bg-blue-800">Send</button>
+                </form>
 
-            {successMessage}
+                {successMessage}
+            </div>
         </div>
     )
 }
