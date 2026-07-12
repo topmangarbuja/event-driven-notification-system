@@ -31,6 +31,12 @@ function App() {
 
         if(response.ok){
             setSentSuccessfully(true);
+            setForm({
+                fullName: "",
+                message: "",
+                mobile: "",
+                email: "",
+            });
         }
     }
 
@@ -71,7 +77,10 @@ function App() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
             <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-gray-900/5">
-                <h1 className="mb-6 text-center text-2xl font-semibold tracking-tight text-gray-900">Send message</h1>
+                <div className="mb-6 flex items-center justify-between">
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Send message</h1>
+                    <button type="button" className="cursor-pointer text-sm font-medium text-blue-600 underline hover:text-blue-800" onClick={fillForm}>Fill with sample data</button>
+                </div>
                 <form onSubmit={submit} className="flex flex-col gap-5">
                     <div>
                         <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-gray-700">Full name</label>
@@ -106,7 +115,6 @@ function App() {
                                value={form.email} onChange={handleChange} name="email"
                                placeholder="john.doe@company.com" required/>
                     </div>
-                    <button type="button" className="cursor-pointer text-sm font-medium text-blue-600 underline hover:text-blue-800" onClick={fillForm}>Fill with sample data</button>
                     <button type="submit" className="cursor-pointer mt-2 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:bg-blue-800">Send</button>
                 </form>
 

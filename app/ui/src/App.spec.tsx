@@ -64,6 +64,29 @@ describe('App Component', () => {
         expect(screen.getByText('Message sent successfully.')).toBeInTheDocument();
     });
 
+    it('should clear the form on successful submission', async() => {
+        renderApp();
+
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+            ok: true
+        } as Response);
+
+        fireEvent.input(screen.getByLabelText('Full name'), {target: {value: 'John Doe'}});
+        fireEvent.input(screen.getByLabelText('Message'), {target: {value: 'Your order 10115 has been delivered successfully.'}});
+        fireEvent.input(screen.getByLabelText('Mobile'), {target: {value: '0411222333'}});
+        fireEvent.input(screen.getByLabelText('Email address'), {target: {value: 'example@gmail.com'}});
+
+        // ensures all updates have been processed and applied to the DOM
+        await act(async()=>{
+            fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+        });
+
+        expect(screen.getByLabelText('Full name')).toHaveValue('');
+        expect(screen.getByLabelText('Message')).toHaveValue('');
+        expect(screen.getByLabelText('Mobile')).toHaveValue('');
+        expect(screen.getByLabelText('Email address')).toHaveValue('');
+    });
+
     it('should hide success message on successful submission after 3 seconds', async () => {
         vi.useFakeTimers();
         renderApp();
