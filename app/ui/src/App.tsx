@@ -77,8 +77,8 @@ function App() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
             <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-gray-900/5">
-                <div className="mb-6 flex items-center justify-between">
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Send message</h1>
+                <div className="mb-6 md:flex md:items-center md:justify-between">
+                    <h1 className="mb-1.5 text-3xl font-bold tracking-tight text-gray-900">Send message</h1>
                     <button type="button" className="cursor-pointer text-sm font-medium text-blue-600 underline hover:text-blue-800" onClick={fillForm}>Fill with sample data</button>
                 </div>
                 <form onSubmit={submit} className="flex flex-col gap-5">
