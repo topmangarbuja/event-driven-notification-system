@@ -29,18 +29,25 @@ var factory = new ConnectionFactory()
 var connection = await factory.CreateConnectionAsync();
 var channel = await connection.CreateChannelAsync();
 
-const string exchange = "message.submitted";
 // declare exchange
-await channel.ExchangeDeclareAsync(exchange: exchange, type: ExchangeType.Fanout);
+await channel.ExchangeDeclareAsync(exchange: Producer.ExchangeName, type: Producer.ExchangeType, durable: Producer.Durable, autoDelete: Producer.AutoDelete);
 
 app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, ILogger<Program> logger) =>
 {
     var body = JsonSerializer.SerializeToUtf8Bytes(request);
-    await channel.BasicPublishAsync(exchange: exchange, 
+    var basicProperties = new BasicProperties()
+    {
+        Persistent = true,
+        ContentType = "application/json"
+    };
+    
+    await channel.BasicPublishAsync(exchange: Producer.ExchangeName, 
         routingKey: string.Empty, 
+        mandatory: false,
+        basicProperties: basicProperties,
         body: body);
     
-    logger.LogInformation("Message sent to exchange {exchange}: {message}", exchange, request);
+    logger.LogInformation("Message sent to exchange {exchange}: {message}", Producer.ExchangeName, request);
     
     return Results.Ok();
 });
@@ -48,3 +55,11 @@ app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, ILogg
 app.Run();
 
 public record SendMessagesRequest(string FullName, string Message, string Mobile, string Email);
+
+public static class Producer
+{
+    public static readonly string ExchangeName = "message.submitted";
+    public static readonly string ExchangeType = RabbitMQ.Client.ExchangeType.Fanout;
+    public static readonly bool Durable = true;
+    public static readonly bool AutoDelete = false;
+}

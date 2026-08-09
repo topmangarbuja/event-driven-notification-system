@@ -21,9 +21,9 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
         try
         {
-            await channel.ExchangeDeclareAsync(SmsConsumer.ExchangeName, type: ExchangeType.Fanout, cancellationToken: stoppingToken);
+            await channel.ExchangeDeclareAsync(SmsConsumer.ExchangeName, type: SmsConsumer.ExchangeType, durable: SmsConsumer.Durable, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
 
-            await channel.QueueDeclareAsync(SmsConsumer.QueueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
+            await channel.QueueDeclareAsync(SmsConsumer.QueueName, durable: SmsConsumer.Durable, exclusive: false, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
             await channel.QueueBindAsync(SmsConsumer.QueueName, SmsConsumer.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
             await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
 
@@ -60,4 +60,7 @@ public static class SmsConsumer
 {
     public static readonly string ExchangeName = "message.submitted";
     public static string QueueName = $"sms-worker.{ExchangeName}";
+    public static readonly string ExchangeType = RabbitMQ.Client.ExchangeType.Fanout;
+    public static readonly bool Durable = true;
+    public static readonly bool AutoDelete = false;
 }

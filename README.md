@@ -118,7 +118,8 @@ Requires the app to be running locally.
 
 ## Possible Enhancements
 
-- **Persistent delivery mode** — messages are not marked as persistent; a RabbitMQ restart loses them
+- **Unroutable message handling** — the API publishes with `mandatory: false`, so messages with no matching queue binding are silently dropped by the broker with no signal to the publisher; enabling `mandatory: true` plus a `BasicReturnAsync` handler would surface these
+- **Publisher confirms** — no `ConfirmSelectAsync`/`WaitForConfirmsOrDieAsync` yet, so the API can't verify the broker actually accepted a published message
 - **Retry & dead-lettering** — both workers have a `TODO` for retry logic and DLQ for failed messages
 - **Connection resilience** — API and workers create a single connection at startup with no reconnection if RabbitMQ goes down
 - **API validation** — no input validation or error responses beyond a 200 OK

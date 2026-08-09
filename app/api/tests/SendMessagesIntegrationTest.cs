@@ -50,12 +50,11 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
 
         var connection = await factory.CreateConnectionAsync();
         var channel = await connection.CreateChannelAsync();
-
-        const string exchange = "message.submitted";
-        await channel.ExchangeDeclareAsync(exchange: exchange, type: ExchangeType.Fanout);
+        
+        await channel.ExchangeDeclareAsync(exchange: Producer.ExchangeName, type: Producer.ExchangeType, durable: Producer.Durable, autoDelete: Producer.AutoDelete);
         
         var queueDeclare = await channel.QueueDeclareAsync();
-        await channel.QueueBindAsync(queueDeclare.QueueName, exchange, routingKey: string.Empty);
+        await channel.QueueBindAsync(queueDeclare.QueueName, Producer.ExchangeName, routingKey: string.Empty);
         await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
 
         var tcs = new TaskCompletionSource<BasicDeliverEventArgs>();
@@ -76,6 +75,7 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
         
         var delivered = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
         delivered.Should().NotBeNull();
+        delivered.BasicProperties.Persistent.Should().BeTrue();
         
         var body = delivered.Body.ToArray();
         var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
