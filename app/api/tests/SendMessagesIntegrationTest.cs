@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 
 namespace tests;
 
@@ -48,35 +47,31 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
             Password = "admin"
         };
 
-        var connection = await factory.CreateConnectionAsync();
-        var channel = await connection.CreateChannelAsync();
-        
+        await using var connection = await factory.CreateConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+
         await channel.ExchangeDeclareAsync(exchange: Producer.ExchangeName, type: Producer.ExchangeType, durable: Producer.Durable, autoDelete: Producer.AutoDelete);
-        
+
         var queueDeclare = await channel.QueueDeclareAsync();
         await channel.QueueBindAsync(queueDeclare.QueueName, Producer.ExchangeName, routingKey: string.Empty);
-        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false);
 
-        var tcs = new TaskCompletionSource<BasicDeliverEventArgs>();
-        var consumer = new AsyncEventingBasicConsumer(channel);
-        consumer.ReceivedAsync += (_, eventArgs) =>
-        {
-            tcs.TrySetResult(eventArgs);
-            return Task.CompletedTask;
-        };
-        
-        await channel.BasicConsumeAsync(queueDeclare.QueueName, autoAck: true, consumer: consumer);
-        
         // Act
         var response = await fixture.HttpClient.SendAsync(request);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
-        var delivered = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        delivered.Should().NotBeNull();
-        delivered.BasicProperties.Persistent.Should().BeTrue();
-        
+
+        // Assert - poll until the published message lands in our probe queue
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        BasicGetResult? delivered = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            delivered = await channel.BasicGetAsync(queueDeclare.QueueName, autoAck: true);
+            if (delivered is not null) break;
+            await Task.Delay(300);
+        }
+
+        delivered.Should().NotBeNull("the API must publish the message to the exchange");
+        delivered!.BasicProperties.Persistent.Should().BeTrue();
+
         var body = delivered.Body.ToArray();
         var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
         message.Should().NotBeNull();
