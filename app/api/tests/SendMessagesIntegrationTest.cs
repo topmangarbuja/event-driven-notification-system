@@ -9,7 +9,7 @@ namespace tests;
 public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture<RabbitMqFixture>
 {
     [Fact]
-    public async Task SendMessages_WithValidRequests_ReturnsOK()
+    public async Task Given_ValidRequest_When_Posted_Then_ReturnsOk()
     {
         // Arrange
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/messages");
@@ -28,7 +28,7 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
     }
 
     [Fact]
-    public async Task SendMessages_WithValidRequests_PublishesToRabbitMQ()
+    public async Task Given_ValidRequest_When_Posted_Then_PublishesToRabbitMq()
     {
         // Arrange
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/messages");

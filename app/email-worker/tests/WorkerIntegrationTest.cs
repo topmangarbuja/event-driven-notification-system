@@ -11,7 +11,7 @@ namespace tests;
 public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper testOutputHelper) : IClassFixture<RabbitMqFixture>
 {
     [Fact]
-    public async Task Worker_ConsumesAndAcknowledgesMessage()
+    public async Task Given_ValidMessage_When_Consumed_Then_LogsAndAcknowledges()
     {
         await using var connection = await CreateConnectionAsync();
 
@@ -45,7 +45,7 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
     }
 
     [Fact]
-    public async Task Worker_DeadLettersUnprocessableMessage()
+    public async Task Given_PoisonMessage_When_DeserializationFails_Then_MessageGoesToDeadLetterQueue()
     {
         await using var connection = await CreateConnectionAsync();
 
@@ -79,7 +79,7 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
         BasicGetResult? deadLettered = null;
         while (DateTime.UtcNow < dlDeadline)
         {
-            deadLettered = await pubChannel.BasicGetAsync(EmailConsumer.DlqQueueName, autoAck: true);
+            deadLettered = await pubChannel.BasicGetAsync(EmailConsumer.DeadLetterQueueName, autoAck: true);
             if (deadLettered is not null) break;
             await Task.Delay(300);
         }
@@ -101,6 +101,9 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
         return await factory.CreateConnectionAsync();
     }
 
+    /// <summary>
+    /// Wait for the worker to declare the queue and start consuming
+    /// </summary>
     private async Task WaitForWorkerReadyAsync(IConnection connection)
     {
         // Wait for the worker to declare the queue and start consuming

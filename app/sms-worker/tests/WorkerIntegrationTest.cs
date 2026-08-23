@@ -12,7 +12,7 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
 {
 
     [Fact]
-    public async Task Worker_ConsumesAndAcknowledgesMessage()
+    public async Task Given_ValidMessage_When_Consumed_Then_LogsAndAcknowledges()
     {
         await using var connection = await CreateConnectionAsync();
         
@@ -48,7 +48,7 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
     }
 
     [Fact]
-    public async Task Worker_DeadLettersOnException()
+    public async Task Given_PoisonMessage_When_DeserializationFails_Then_MessageGoesToDeadLetterQueue()
     {
         await using var connection = await CreateConnectionAsync();
         

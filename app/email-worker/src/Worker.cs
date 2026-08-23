@@ -16,65 +16,59 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS")!
         };
 
-        var connection = await factory.CreateConnectionAsync(stoppingToken);
-        var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+        await using var connection = await factory.CreateConnectionAsync(stoppingToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-        try
+        await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
+        await DeclareEmailTopologyAsync(channel, stoppingToken);
+        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
+
+        var consumer = new AsyncEventingBasicConsumer(channel);
+        consumer.ReceivedAsync += async (_, eventArgs) =>
         {
-            await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
-            await DeclareEmailTopologyAsync(channel, stoppingToken);
-            await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
+            var body = eventArgs.Body.ToArray();
 
-            var consumer = new AsyncEventingBasicConsumer(channel);
-            consumer.ReceivedAsync += async (_, eventArgs) =>
+            try
             {
-                var body = eventArgs.Body.ToArray();
+                var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
 
-                try
-                {
-                    var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
+                logger.LogInformation("Sending email to {Email}: Dear {FullName}, {Message}", message!.Email, message.FullName, message.Message);
 
-                    logger.LogInformation("Sending email to {Email}: Dear {FullName}, {Message}", message!.Email, message.FullName, message.Message);
+                await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to process email message, sending to dead-letter queue");
 
-                    await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to process email message, sending to dead-letter queue");
+                await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
+            }
+        };
 
-                    await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
-                }
-            };
+        await channel.BasicConsumeAsync(EmailConsumer.QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
 
-            await channel.BasicConsumeAsync(EmailConsumer.QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
-
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        finally
-        {
-            await channel.CloseAsync(stoppingToken);
-            await connection.CloseAsync(stoppingToken);
-            channel?.Dispose();
-            connection?.Dispose();
-        }
+        await Task.Delay(Timeout.Infinite, stoppingToken);
     }
+    
     private static async Task DeclareEmailTopologyAsync(IChannel channel, CancellationToken stoppingToken)
     {
         await channel.ExchangeDeclareAsync(EmailConsumer.ExchangeName, type: EmailConsumer.ExchangeType, durable: EmailConsumer.Durable, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
+        
+        // Declare the queue with dead-letter exchange arguments so that
+        // messages that are negatively acknowledged will be routed to the dead-letter exchange by the broker
         await channel.QueueDeclareAsync(EmailConsumer.QueueName, durable: EmailConsumer.Durable, exclusive: false, autoDelete: EmailConsumer.AutoDelete,
             arguments: new Dictionary<string, object?>
             {
-                ["x-dead-letter-exchange"] = EmailConsumer.DlxExchangeName
+                ["x-dead-letter-exchange"] = EmailConsumer.DeadLetterExchangeName
             }, cancellationToken: stoppingToken);
         await channel.QueueBindAsync(EmailConsumer.QueueName, EmailConsumer.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
     }
 
     private static async Task DeclareDeadLetterTopologyAsync(IChannel channel, CancellationToken stoppingToken)
     {
-        // Messages that are negatively acknowledged will be routed to the dead-letter exchange by the broker
-        await channel.ExchangeDeclareAsync(EmailConsumer.DlxExchangeName, type: EmailConsumer.ExchangeType, durable: EmailConsumer.Durable, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
-        await channel.QueueDeclareAsync(EmailConsumer.DlqQueueName, durable: EmailConsumer.Durable, exclusive: false, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
-        await channel.QueueBindAsync(EmailConsumer.DlqQueueName, EmailConsumer.DlxExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
+        // Declare the dead-letter exchange and queue for the email worker
+        await channel.ExchangeDeclareAsync(EmailConsumer.DeadLetterExchangeName, type: EmailConsumer.ExchangeType, durable: EmailConsumer.Durable, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
+        await channel.QueueDeclareAsync(EmailConsumer.DeadLetterQueueName, durable: EmailConsumer.Durable, exclusive: false, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
+        await channel.QueueBindAsync(EmailConsumer.DeadLetterQueueName, EmailConsumer.DeadLetterExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
     }
 }
 public record SendMessagesRequest(string FullName, string Message, string Mobile, string Email);
@@ -86,6 +80,6 @@ public static class EmailConsumer
     public const string ExchangeType = RabbitMQ.Client.ExchangeType.Fanout;
     public const bool Durable = true;
     public const bool AutoDelete = false;
-    public const string DlxExchangeName = $"{QueueName}.dlx";
-    public const string DlqQueueName = $"{QueueName}.dlq";
+    public const string DeadLetterExchangeName = $"{QueueName}.dlx";
+    public const string DeadLetterQueueName = $"{QueueName}.dlq";
 }

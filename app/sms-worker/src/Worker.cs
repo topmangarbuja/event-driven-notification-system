@@ -16,49 +16,38 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS")!
         };
 
-        var connection = await factory.CreateConnectionAsync(stoppingToken);
-        var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+        await using var connection = await factory.CreateConnectionAsync(stoppingToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-        try
+        await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
+        await DeclareSmsTopologyAsync(channel, stoppingToken);
+        
+        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
+        var consumer = new AsyncEventingBasicConsumer(channel);
+        consumer.ReceivedAsync += async (_, eventArgs) =>
         {
-            await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
-            await DeclareSmsTopologyAsync(channel, stoppingToken);
-            
-            await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
-            var consumer = new AsyncEventingBasicConsumer(channel);
-            consumer.ReceivedAsync += async (_, eventArgs) =>
+            try
             {
-                try
-                {
-                    // TODO: Implement retry logic and dead-lettering for failed messages.
-                    var body = eventArgs.Body.ToArray();
-                    var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
+                var body = eventArgs.Body.ToArray();
+                var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
 
-                    logger.LogInformation("Sending SMS to {Mobile}: Dear {FullName}, {Message}",
-                        message.Mobile, message.FullName, message.Message);
+                logger.LogInformation("Sending SMS to {Mobile}: Dear {FullName}, {Message}",
+                    message.Mobile, message.FullName, message.Message);
 
-                    await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to process sms message, sending to dead-letter queue");
+                await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to process sms message, sending to dead-letter queue");
 
-                    await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
-                }
-                
-            };
+                await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
+            }
+            
+        };
 
-            await channel.BasicConsumeAsync(SmsConsumer.QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
+        await channel.BasicConsumeAsync(SmsConsumer.QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
 
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        finally
-        {
-            await channel.CloseAsync(stoppingToken);
-            await connection.CloseAsync(stoppingToken);
-            channel?.Dispose();
-            connection?.Dispose();
-        }
+        await Task.Delay(Timeout.Infinite, stoppingToken);
     }
     
     private async Task DeclareSmsTopologyAsync(IChannel channel, CancellationToken stoppingToken)
