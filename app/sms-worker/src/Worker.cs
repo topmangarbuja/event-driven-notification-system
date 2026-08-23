@@ -21,23 +21,31 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
         try
         {
-            await channel.ExchangeDeclareAsync(SmsConsumer.ExchangeName, type: SmsConsumer.ExchangeType, durable: SmsConsumer.Durable, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
-
-            await channel.QueueDeclareAsync(SmsConsumer.QueueName, durable: SmsConsumer.Durable, exclusive: false, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
-            await channel.QueueBindAsync(SmsConsumer.QueueName, SmsConsumer.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
+            await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
+            await DeclareSmsTopologyAsync(channel, stoppingToken);
+            
             await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
-
             var consumer = new AsyncEventingBasicConsumer(channel);
             consumer.ReceivedAsync += async (_, eventArgs) =>
             {
-                // TODO: Implement retry logic and dead-lettering for failed messages.
-                var body = eventArgs.Body.ToArray();
-                var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
+                try
+                {
+                    // TODO: Implement retry logic and dead-lettering for failed messages.
+                    var body = eventArgs.Body.ToArray();
+                    var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
 
-                logger.LogInformation("Sending SMS to {Mobile}: Dear {FullName}, {Message}",
-                    message.Mobile, message.FullName, message.Message);
+                    logger.LogInformation("Sending SMS to {Mobile}: Dear {FullName}, {Message}",
+                        message.Mobile, message.FullName, message.Message);
 
-                await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+                    await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to process sms message, sending to dead-letter queue");
+
+                    await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
+                }
+                
             };
 
             await channel.BasicConsumeAsync(SmsConsumer.QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
@@ -52,15 +60,40 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             connection?.Dispose();
         }
     }
+    
+    private async Task DeclareSmsTopologyAsync(IChannel channel, CancellationToken stoppingToken)
+    {
+        await channel.ExchangeDeclareAsync(SmsConsumer.ExchangeName, type: SmsConsumer.ExchangeType, durable: SmsConsumer.Durable, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
+        
+        // Declare the queue with dead-letter exchange arguments so that
+        // messages that are negatively acknowledged will be routed to the dead-letter exchange by the broker
+        await channel.QueueDeclareAsync(SmsConsumer.QueueName, durable: SmsConsumer.Durable, exclusive: false, autoDelete: SmsConsumer.AutoDelete, 
+            arguments: new Dictionary<string, object?>()
+            {
+                { "x-dead-letter-exchange", SmsConsumer.DeadLetterExchangeName },
+            },
+            cancellationToken: stoppingToken);
+        await channel.QueueBindAsync(SmsConsumer.QueueName, SmsConsumer.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
+    }
+
+    private async Task DeclareDeadLetterTopologyAsync(IChannel channel, CancellationToken stoppingToken)
+    {
+        // Declare the dead-letter exchange and queue for the sms worker
+        await channel.ExchangeDeclareAsync(SmsConsumer.DeadLetterExchangeName, type: SmsConsumer.ExchangeType, durable: SmsConsumer.Durable, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
+        await channel.QueueDeclareAsync(SmsConsumer.DeadLetterQueueName, durable: SmsConsumer.Durable, exclusive: false, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
+        await channel.QueueBindAsync(SmsConsumer.DeadLetterQueueName, SmsConsumer.DeadLetterExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
+    }
 }
 
 public record SendMessagesRequest(string FullName, string Message, string Mobile, string Email);
 
 public static class SmsConsumer
 {
-    public static readonly string ExchangeName = "message.submitted";
-    public static string QueueName = $"sms-worker.{ExchangeName}";
-    public static readonly string ExchangeType = RabbitMQ.Client.ExchangeType.Fanout;
-    public static readonly bool Durable = true;
-    public static readonly bool AutoDelete = false;
+    public const string ExchangeName = "message.submitted";
+    public const string QueueName = $"sms-worker.{ExchangeName}";
+    public const string ExchangeType = RabbitMQ.Client.ExchangeType.Fanout;
+    public const bool Durable = true;
+    public const bool AutoDelete = false;
+    public const string DeadLetterExchangeName = $"{QueueName}.dlx";
+    public const string DeadLetterQueueName = $"{QueueName}.dlq";
 }
