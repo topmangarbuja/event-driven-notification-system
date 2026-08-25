@@ -4,7 +4,7 @@ using RabbitMQ.Client.Events;
 
 namespace src;
 
-public class Worker(ILogger<Worker> logger) : BackgroundService
+public class Worker(ProcessedMessageStore processedMessageStore, ILogger<Worker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,9 +30,15 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
             try
             {
-                var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
+                var message = JsonSerializer.Deserialize<Message>(body);
+                
+                // store the message
+                processedMessageStore.AddMessage(message);
 
-                logger.LogInformation("Sending email to {Email}: Dear {FullName}, {Message}", message!.Email, message.FullName, message.Message);
+                // simulate sending email
+                await Task.Delay(100, stoppingToken);
+                
+                logger.LogInformation("Message {Id} - Sending email to {Email}: Dear {FullName}, {Body}", message!.Id, message.Email, message.FullName, message.Body);
 
                 await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
             }
@@ -71,7 +77,6 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         await channel.QueueBindAsync(EmailConsumer.DeadLetterQueueName, EmailConsumer.DeadLetterExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
     }
 }
-public record SendMessagesRequest(string FullName, string Message, string Mobile, string Email);
 
 public static class EmailConsumer
 {

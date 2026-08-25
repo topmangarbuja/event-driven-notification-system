@@ -4,7 +4,7 @@ using RabbitMQ.Client.Events;
 
 namespace src;
 
-public class Worker(ILogger<Worker> logger) : BackgroundService
+public class Worker(ProcessedMessageStore processedMessageStore, ILogger<Worker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -29,10 +29,16 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             try
             {
                 var body = eventArgs.Body.ToArray();
-                var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
+                var message = JsonSerializer.Deserialize<Message>(body);
 
-                logger.LogInformation("Sending SMS to {Mobile}: Dear {FullName}, {Message}",
-                    message.Mobile, message.FullName, message.Message);
+                // store the message
+                processedMessageStore.AddMessage(message);
+
+                // simulate sending SMS
+                await Task.Delay(100, stoppingToken);
+
+                logger.LogInformation("Message {Id} - Sending SMS to {Mobile}: Dear {FullName}, {Body}",
+                    message!.Id, message.Mobile, message.FullName, message.Body);
 
                 await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
             }
@@ -73,8 +79,6 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         await channel.QueueBindAsync(SmsConsumer.DeadLetterQueueName, SmsConsumer.DeadLetterExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
     }
 }
-
-public record SendMessagesRequest(string FullName, string Message, string Mobile, string Email);
 
 public static class SmsConsumer
 {
