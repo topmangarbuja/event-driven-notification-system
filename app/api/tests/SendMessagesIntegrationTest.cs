@@ -2,22 +2,24 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
+using src;
 
 namespace tests;
 
 public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture<RabbitMqFixture>
 {
     [Fact]
-    public async Task Given_ValidRequest_When_Posted_Then_ReturnsOk()
+    public async Task PostMessage_WhenValidRequest_StoresMessage()
     {
         // Arrange
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/messages");
         request.Content = JsonContent.Create(new SendMessagesRequest(
-            FullName: "John Doe",
+            FullName: "Alex Joe",
             Message: "Hello, this is a test message.",
-            Mobile: "0434567890",
-            Email: "example@gmail.com"
+            Mobile: "0411222333",
+            Email: "alexjoe@gmail.com"
         ));
         
         // Act
@@ -25,10 +27,19 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var store = fixture.Factory.Services.GetRequiredService<MessageStore>();
+        var message = store.GetMessages().FirstOrDefault(m => m.Mobile == "0411222333");
+        message.Should().NotBeNull();
+        Guid.TryParse(message.Id, out _).Should().BeTrue();
+        message.FullName.Should().Be("Alex Joe");
+        message.Body.Should().Be("Hello, this is a test message.");
+        message.Mobile.Should().Be("0411222333");
+        message.Email.Should().Be("alexjoe@gmail.com");
     }
 
     [Fact]
-    public async Task Given_ValidRequest_When_Posted_Then_PublishesToRabbitMq()
+    public async Task PostMessage_WhenValidRequest_PublishesMessageToExchange()
     {
         // Arrange
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/messages");
@@ -73,10 +84,11 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
         delivered!.BasicProperties.Persistent.Should().BeTrue();
 
         var body = delivered.Body.ToArray();
-        var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
+        var message = JsonSerializer.Deserialize<Message>(body);
         message.Should().NotBeNull();
+        Guid.TryParse(message.Id, out _).Should().BeTrue();
         message.FullName.Should().Be("John Doe");
-        message.Message.Should().Be("Hello, this is a test message.");
+        message.Body.Should().Be("Hello, this is a test message.");
         message.Mobile.Should().Be("0434567890");
         message.Email.Should().Be("example@gmail.com");
     }

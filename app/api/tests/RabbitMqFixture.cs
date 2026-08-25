@@ -5,8 +5,8 @@ namespace tests;
 
 public class RabbitMqFixture : IAsyncLifetime
 {
-    private readonly WebApplicationFactory<Program> _factory = new();
-
+    public WebApplicationFactory<Program> Factory { get; private set; } = new();
+    
     public HttpClient HttpClient { get; private set; }
 
     public readonly RabbitMqContainer Container = new RabbitMqBuilder("rabbitmq:4.3.0-management-alpine")
@@ -23,14 +23,14 @@ public class RabbitMqFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("RABBITMQ_PORT", Container.GetMappedPublicPort(5672).ToString());
         Environment.SetEnvironmentVariable("RABBITMQ_USER", "admin");
         Environment.SetEnvironmentVariable("RABBITMQ_PASS", "admin");
-        
-        HttpClient = _factory.CreateClient();
+
+        HttpClient = Factory.CreateClient();
     }
 
     public async Task DisposeAsync()
     {
         HttpClient?.Dispose();
-        await _factory.DisposeAsync();
+        await Factory.DisposeAsync();
         await Container.DisposeAsync();
     }
 }

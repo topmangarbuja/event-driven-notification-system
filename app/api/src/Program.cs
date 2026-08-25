@@ -1,12 +1,15 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using RabbitMQ.Client;
+using src;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddSingleton<MessageStore>();
 
 var app = builder.Build();
 
@@ -32,9 +35,11 @@ var channel = await connection.CreateChannelAsync();
 // declare exchange
 await channel.ExchangeDeclareAsync(exchange: Producer.ExchangeName, type: Producer.ExchangeType, durable: Producer.Durable, autoDelete: Producer.AutoDelete);
 
-app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, ILogger<Program> logger) =>
+app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, MessageStore messageStore, ILogger<Program> logger) =>
 {
-    var body = JsonSerializer.SerializeToUtf8Bytes(request);
+    var message = messageStore.AddMessage(request);
+    
+    var body = JsonSerializer.SerializeToUtf8Bytes(message);
     var basicProperties = new BasicProperties()
     {
         Persistent = true,
@@ -47,7 +52,7 @@ app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, ILogg
         basicProperties: basicProperties,
         body: body);
     
-    logger.LogInformation("Message sent to exchange {exchange}: {message}", Producer.ExchangeName, request);
+    logger.LogInformation("Message {Id} sent to exchange {Exchange} for {FullName} ({Email}, {Mobile})", message.Id, Producer.ExchangeName, message.FullName, message.Email, message.Mobile);
     
     return Results.Ok();
 });
