@@ -120,6 +120,7 @@ function App() {
 
                 {successMessage}
             </div>
+            <a href="/api/processed/email" target="_blank" className="mt-4 text-sm font-medium text-blue-600 underline hover:text-blue-800">View messages processed by Email service</a>
         </div>
     )
 }

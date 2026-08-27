@@ -11,20 +11,30 @@ namespace tests;
 public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper testOutputHelper) : IClassFixture<RabbitMqFixture>
 {
     [Fact]
-    public async Task Given_ValidMessage_When_Consumed_Then_LogsAndAcknowledges()
+    public async Task Given_ValidMessage_When_Consumed_Then_LogsAndPublishesProcessedEvent()
     {
         await using var connection = await CreateConnectionAsync();
 
         await WaitForWorkerReadyAsync(connection);
 
-        // Publish a message to the exchange the Worker is consuming from
+        var message = new Message
+        {
+            Id = Guid.NewGuid().ToString(),
+            FullName = "John Doe",
+            Body = "Hello, this is a test message.",
+            Mobile = "0434567890",
+            Email = "example@gmail.com"
+        };
+
+        // Bind a probe queue to the processed exchange BEFORE publishing, so the worker's
+        // processed event is captured rather than dropped by the broker
         await using var pubChannel = await connection.CreateChannelAsync();
-        var body = JsonSerializer.SerializeToUtf8Bytes(new SendMessagesRequest(
-            FullName: "John Doe",
-            Message: "Hello, this is a test message.",
-            Mobile: "0434567890",
-            Email: "example@gmail.com"
-        ));
+        await pubChannel.ExchangeDeclareAsync(exchange: EmailConsumer.ProcessedExchangeName, type: EmailConsumer.ExchangeType, durable: EmailConsumer.Durable, autoDelete: EmailConsumer.AutoDelete);
+        var probeQueue = await pubChannel.QueueDeclareAsync();
+        await pubChannel.QueueBindAsync(probeQueue.QueueName, EmailConsumer.ProcessedExchangeName, routingKey: string.Empty);
+
+        // Publish a message to the exchange the Worker is consuming from
+        var body = JsonSerializer.SerializeToUtf8Bytes(message);
         await pubChannel.BasicPublishAsync(exchange: EmailConsumer.ExchangeName, routingKey: "", body: body);
 
         // Poll for the log entry
@@ -37,11 +47,29 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
             await Task.Delay(300);
         }
 
-        // Assert
+        // Assert the worker logged the email send
         fixture.FakeLogger.Collector.GetSnapshot()
             .Should().Contain(r =>
                 r.Level == LogLevel.Information &&
                 r.Message.Contains("Sending email to example@gmail.com: Dear John Doe, Hello, this is a test message."));
+
+        // Assert a processed event was published to the processed exchange
+        var processedDeadline = DateTime.UtcNow.AddSeconds(10);
+        BasicGetResult? processed = null;
+        while (DateTime.UtcNow < processedDeadline)
+        {
+            processed = await pubChannel.BasicGetAsync(probeQueue.QueueName, autoAck: true);
+            if (processed is not null) break;
+            await Task.Delay(300);
+        }
+
+        processed.Should().NotBeNull("the worker must publish a processed event after handling a message");
+        var processedEvent = JsonSerializer.Deserialize<ProcessedMessage>(processed!.Body.ToArray());
+        processedEvent.Should().NotBeNull();
+        processedEvent!.Id.Should().Be(message.Id);
+        processedEvent.Channel.Should().Be("email");
+        processedEvent.FullName.Should().Be("John Doe");
+        processedEvent.Body.Should().Be("Hello, this is a test message.");
     }
 
     [Fact]

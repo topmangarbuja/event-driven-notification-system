@@ -21,6 +21,7 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
         await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
         await DeclareEmailTopologyAsync(channel, stoppingToken);
+        await DeclareProcessedTopologyAsync(channel, stoppingToken);
         await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
@@ -30,9 +31,29 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
             try
             {
-                var message = JsonSerializer.Deserialize<SendMessagesRequest>(body);
+                var message = JsonSerializer.Deserialize<Message>(body);
 
-                logger.LogInformation("Sending email to {Email}: Dear {FullName}, {Message}", message!.Email, message.FullName, message.Message);
+                logger.LogInformation("Sending email to {Email}: Dear {FullName}, {Body}", message!.Email, message.FullName, message.Body);
+
+                // Publish a processed event so the API/UI can show this message was handled
+                var processed = new ProcessedMessage
+                {
+                    Id = message.Id,
+                    Channel = "email",
+                    ProcessedAt = DateTimeOffset.UtcNow,
+                    FullName = message.FullName,
+                    Body = message.Body,
+                    Mobile = message.Mobile,
+                    Email = message.Email
+                };
+                var processedBody = JsonSerializer.SerializeToUtf8Bytes(processed);
+                await channel.BasicPublishAsync(
+                    exchange: EmailConsumer.ProcessedExchangeName,
+                    routingKey: string.Empty,
+                    mandatory: false,
+                    basicProperties: new BasicProperties { ContentType = "application/json" },
+                    body: processedBody,
+                    cancellationToken: stoppingToken);
 
                 await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
             }
@@ -70,9 +91,13 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         await channel.QueueDeclareAsync(EmailConsumer.DeadLetterQueueName, durable: EmailConsumer.Durable, exclusive: false, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
         await channel.QueueBindAsync(EmailConsumer.DeadLetterQueueName, EmailConsumer.DeadLetterExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
     }
-}
-public record SendMessagesRequest(string FullName, string Message, string Mobile, string Email);
 
+    private static async Task DeclareProcessedTopologyAsync(IChannel channel, CancellationToken stoppingToken)
+    {
+        // Declare the exchange that carries "processed" events back out to the API for display
+        await channel.ExchangeDeclareAsync(EmailConsumer.ProcessedExchangeName, type: EmailConsumer.ExchangeType, durable: EmailConsumer.Durable, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
+    }
+}
 public static class EmailConsumer
 {
     public const string ExchangeName = "message.submitted";
@@ -82,4 +107,5 @@ public static class EmailConsumer
     public const bool AutoDelete = false;
     public const string DeadLetterExchangeName = $"{QueueName}.dlx";
     public const string DeadLetterQueueName = $"{QueueName}.dlq";
+    public const string ProcessedExchangeName = "message.processed";
 }

@@ -92,4 +92,73 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
         message.Mobile.Should().Be("0434567890");
         message.Email.Should().Be("example@gmail.com");
     }
+
+    [Fact]
+    public async Task ProcessedEvent_WhenPublished_IsStoredAndReturnedByChannel()
+    {
+        // Arrange - publish a processed event straight into the processed exchange
+        var factory = new ConnectionFactory()
+        {
+            HostName = fixture.Container.Hostname,
+            Port     = fixture.Container.GetMappedPublicPort(5672),
+            UserName = "admin",
+            Password = "admin"
+        };
+
+        await using var connection = await factory.CreateConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+
+        await channel.ExchangeDeclareAsync(exchange: Producer.ProcessedExchangeName, type: Producer.ExchangeType, durable: Producer.Durable, autoDelete: Producer.AutoDelete);
+
+        // Wait for the API's processed consumer to declare and bind its queue so the published event isn't lost
+        var readyDeadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < readyDeadline)
+        {
+            try
+            {
+                await channel.QueueDeclarePassiveAsync(ProcessedStore.QueueName);
+                break;
+            }
+            catch
+            {
+                await Task.Delay(300);
+            }
+        }
+
+        var processed = new ProcessedMessage
+        {
+            Id = Guid.NewGuid().ToString(),
+            Channel = "email",
+            ProcessedAt = DateTimeOffset.UtcNow,
+            FullName = "Talia Lindgren",
+            Body = "Hi, your order is confirmed.",
+            Mobile = "0422999666",
+            Email = "talia@example.com"
+        };
+        var body = JsonSerializer.SerializeToUtf8Bytes(processed);
+        await channel.BasicPublishAsync(
+            exchange: Producer.ProcessedExchangeName,
+            routingKey: string.Empty,
+            mandatory: false,
+            basicProperties: new BasicProperties { ContentType = "application/json" },
+            body: body);
+
+        // Act - poll the endpoint until the consumer stores it
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var store = fixture.Factory.Services.GetRequiredService<ProcessedMessageStore>();
+        while (DateTime.UtcNow < deadline && !store.GetMessages("email").Any(m => m.Id == processed.Id))
+        {
+            await Task.Delay(300);
+        }
+
+        // Assert
+        var response = await fixture.HttpClient.GetAsync($"/api/processed/{processed.Channel}");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var stored = await response.Content.ReadFromJsonAsync<List<ProcessedMessage>>();
+        stored.Should().ContainSingle(m => m.Id == processed.Id);
+        var storedMessage = stored!.Single(m => m.Id == processed.Id);
+        storedMessage.FullName.Should().Be("Talia Lindgren");
+        storedMessage.Email.Should().Be("talia@example.com");
+    }
 }

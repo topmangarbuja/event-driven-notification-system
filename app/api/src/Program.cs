@@ -10,6 +10,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<MessageStore>();
+builder.Services.AddSingleton<ProcessedMessageStore>();
+builder.Services.AddHostedService<ProcessedEventConsumer>();
 
 var app = builder.Build();
 
@@ -57,6 +59,9 @@ app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, Messa
     return Results.Ok();
 });
 
+app.MapGet("/api/processed", (ProcessedMessageStore store) => Results.Ok(store.GetMessages()));
+app.MapGet("/api/processed/{channel}", (string channel, ProcessedMessageStore store) => Results.Ok(store.GetMessages(channel)));
+
 app.Run();
 
 public record SendMessagesRequest(string FullName, string Message, string Mobile, string Email);
@@ -67,4 +72,5 @@ public static class Producer
     public static readonly string ExchangeType = RabbitMQ.Client.ExchangeType.Fanout;
     public static readonly bool Durable = true;
     public static readonly bool AutoDelete = false;
+    public const string ProcessedExchangeName = "message.processed";
 }

@@ -130,7 +130,8 @@ Requires the app to be running locally.
 - **Publisher confirms** — no `ConfirmSelectAsync`/`WaitForConfirmsOrDieAsync` yet, so the API can't verify the broker actually accepted a published message
 - **Idempotent consumers** — messages carry no ID and workers don't deduplicate, so a redelivered message (e.g. a crash after sending but before acking) would produce a duplicate email/SMS; carrying an idempotency key and skipping already-processed messages would guard against this
 - **Retries for the workers** — failed messages currently dead-letter on first failure for both email and SMS workers; retries (in-process loop or a TTL retry queue) before parking them would be the next step
-- **Connection resilience** — API and workers create a single connection at startup with no reconnection if RabbitMQ goes down
+- **Connection resilience** — the API (publisher + processed-event consumer) and workers create connections at startup with no reconnection if RabbitMQ goes down
 - **API validation** — no input validation or error responses beyond a 200 OK
 - **UI error handling** — only checks `response.ok`; no loading state, no error display
+- **Worker feedback loop** — the email worker publishes a `message.processed` event that the API projects and exposes via `/api/processed/email`, but the SMS worker doesn't emit this yet; SMS reporting would complete the loop
 - **OpenTelemetry** — distributed tracing across API and workers for observability
