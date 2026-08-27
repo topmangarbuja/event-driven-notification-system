@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using src;
@@ -12,7 +13,7 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
 {
 
     [Fact]
-    public async Task Given_ValidMessage_When_Consumed_Then_LogsAndAcknowledges()
+    public async Task OnReceived_WhenValidMessage_StoresAndLogsMessage()
     {
         await using var connection = await CreateConnectionAsync();
         
@@ -20,12 +21,15 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
         
         // Publish a message to the exchange the Worker is consuming from
         await using var pubChannel = await connection.CreateChannelAsync();
-        var body = JsonSerializer.SerializeToUtf8Bytes(new SendMessagesRequest(
-            FullName: "John Doe",
-            Message: "Hello, this is a test message.",
-            Mobile: "0434567890",
-            Email: "example@gmail.com"
-        ));
+        var message = new Message
+        {
+            Id = Guid.NewGuid().ToString(),
+            FullName = "John Doe",
+            Body = "Hello, this is a test message.",
+            Mobile = "0434567890",
+            Email = "example@gmail.com"
+        };
+        var body = JsonSerializer.SerializeToUtf8Bytes(message);
 
         await pubChannel.BasicPublishAsync(exchange: SmsConsumer.ExchangeName, routingKey: "", body: body);
         
@@ -40,15 +44,17 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
         }
 
         // Assert
+        var store = fixture.Host.Services.GetRequiredService<ProcessedMessageStore>();
+        store.GetMessages().Should().Contain(m => m == message.Id);
+        
         fixture.FakeLogger.Collector.GetSnapshot()
             .Should().Contain(r =>
                 r.Level == LogLevel.Information &&
                 r.Message.Contains("Sending SMS to 0434567890: Dear John Doe, Hello, this is a test message."));
-                
     }
 
     [Fact]
-    public async Task Given_PoisonMessage_When_DeserializationFails_Then_MessageGoesToDeadLetterQueue()
+    public async Task OnReceived_WhenPoisonMessage_MessageGoesToDeadLetterQueue()
     {
         await using var connection = await CreateConnectionAsync();
         

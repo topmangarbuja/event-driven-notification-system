@@ -9,7 +9,7 @@ namespace tests;
 
 public class RabbitMqFixture : IAsyncLifetime
 {
-    private IHost _host = null!;
+    public IHost Host { get; private set; }
 
     public readonly RabbitMqContainer Container = new RabbitMqBuilder("rabbitmq:4.3.0-management-alpine")
         .WithUsername("admin")
@@ -28,18 +28,19 @@ public class RabbitMqFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("RABBITMQ_USER", "admin");
         Environment.SetEnvironmentVariable("RABBITMQ_PASS", "admin");
         
-        _host = Host.CreateDefaultBuilder()
+        Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
             .ConfigureServices(services => services.AddHostedService<Worker>())
+            .ConfigureServices(services => services.AddSingleton<ProcessedMessageStore>())
             .ConfigureServices(services => services.AddSingleton<ILogger<Worker>>(FakeLogger))
             .Build();
 
-        await _host.StartAsync();
+        await Host.StartAsync();
     }
 
     public async Task DisposeAsync()
     {
-        await _host.StopAsync();
-        _host.Dispose();
+        await Host.StopAsync();
+        Host.Dispose();
         await Container.DisposeAsync();
     }
 }
