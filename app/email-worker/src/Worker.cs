@@ -1,52 +1,32 @@
-using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
 namespace src;
 
-public class Worker(ProcessedMessageStore processedMessageStore, ILogger<Worker> logger) : BackgroundService
+public class Worker(EmailMessageHandler messageHandler, ILogger<Worker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var factory = new ConnectionFactory
-        {
-            HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST")!,
-            Port     = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT")!),
-            UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER")!,
-            Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS")!
-        };
-
-        await using var connection = await factory.CreateConnectionAsync(stoppingToken);
+        await using var connection = await CreateConnectionAsync(stoppingToken);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
-        await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
-        await DeclareEmailTopologyAsync(channel, stoppingToken);
+        await DeclareTopologyAsync(channel, stoppingToken);
         await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, eventArgs) =>
         {
-            var body = eventArgs.Body.ToArray();
-
             try
             {
-                var message = JsonSerializer.Deserialize<Message>(body);
-                
-                if(processedMessageStore.IsMessageProcessed(message!.Id))
+                var outcome = await messageHandler.HandleAsync(eventArgs.Body.ToArray(), stoppingToken);
+                if (outcome == MessageOutcome.Ack)
                 {
-                    logger.LogInformation("Message {Id} has already been processed, skipping", message.Id);
                     await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
-                    return;
                 }
-                
-                // simulate sending email
-                await Task.Delay(100, stoppingToken);
-                logger.LogInformation("Message {Id} - Sending email to {Email}: Dear {FullName}, {Body}", message!.Id, message.Email, message.FullName, message.Body);
-                
-                // store the processed message
-                processedMessageStore.AddMessage(message);
-
-                await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+                else
+                {
+                    await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
+                }
             }
             catch (Exception ex)
             {
@@ -60,24 +40,34 @@ public class Worker(ProcessedMessageStore processedMessageStore, ILogger<Worker>
 
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }
-    
-    private static async Task DeclareEmailTopologyAsync(IChannel channel, CancellationToken stoppingToken)
+
+    private static async Task<IConnection> CreateConnectionAsync(CancellationToken stoppingToken)
     {
+        var factory = new ConnectionFactory
+        {
+            HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST")!,
+            Port     = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT")!),
+            UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER")!,
+            Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS")!
+        };
+
+        return await factory.CreateConnectionAsync(stoppingToken);
+    }
+
+    private static async Task DeclareTopologyAsync(IChannel channel, CancellationToken stoppingToken)
+    {
+        // Exchange that receives published messages
         await channel.ExchangeDeclareAsync(EmailConsumer.ExchangeName, type: EmailConsumer.ExchangeType, durable: EmailConsumer.Durable, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
-        
-        // Declare the queue with dead-letter exchange arguments so that
-        // messages that are negatively acknowledged will be routed to the dead-letter exchange by the broker
+
+        // Queue bound to the exchange, forwarding negative acknowledgements to the dead-letter exchange
         await channel.QueueDeclareAsync(EmailConsumer.QueueName, durable: EmailConsumer.Durable, exclusive: false, autoDelete: EmailConsumer.AutoDelete,
             arguments: new Dictionary<string, object?>
             {
                 ["x-dead-letter-exchange"] = EmailConsumer.DeadLetterExchangeName
             }, cancellationToken: stoppingToken);
         await channel.QueueBindAsync(EmailConsumer.QueueName, EmailConsumer.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
-    }
 
-    private static async Task DeclareDeadLetterTopologyAsync(IChannel channel, CancellationToken stoppingToken)
-    {
-        // Declare the dead-letter exchange and queue for the email worker
+        // Dead-letter exchange and queue that hold failed messages
         await channel.ExchangeDeclareAsync(EmailConsumer.DeadLetterExchangeName, type: EmailConsumer.ExchangeType, durable: EmailConsumer.Durable, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
         await channel.QueueDeclareAsync(EmailConsumer.DeadLetterQueueName, durable: EmailConsumer.Durable, exclusive: false, autoDelete: EmailConsumer.AutoDelete, cancellationToken: stoppingToken);
         await channel.QueueBindAsync(EmailConsumer.DeadLetterQueueName, EmailConsumer.DeadLetterExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
