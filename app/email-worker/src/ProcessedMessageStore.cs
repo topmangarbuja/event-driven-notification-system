@@ -10,6 +10,11 @@ public class ProcessedMessageStore
     {
         _processedMessages.Add(message.Id);
     }
+
+    public bool IsMessageProcessed(string id)
+    {
+        return _processedMessages.Contains(id);
+    }
 }
 
 public class Message

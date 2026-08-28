@@ -32,6 +32,13 @@ public class Worker(ProcessedMessageStore processedMessageStore, ILogger<Worker>
             {
                 var message = JsonSerializer.Deserialize<Message>(body);
                 
+                if(processedMessageStore.IsMessageProcessed(message!.Id))
+                {
+                    logger.LogInformation("Message {Id} has already been processed, skipping", message.Id);
+                    await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+                    return;
+                }
+                
                 // simulate sending email
                 await Task.Delay(100, stoppingToken);
                 logger.LogInformation("Message {Id} - Sending email to {Email}: Dear {FullName}, {Body}", message!.Id, message.Email, message.FullName, message.Body);
