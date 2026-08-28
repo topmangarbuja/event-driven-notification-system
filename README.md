@@ -128,7 +128,7 @@ Requires the app to be running locally.
 
 - **Unroutable message handling** — the API publishes with `mandatory: false`, so messages with no matching queue binding are silently dropped by the broker with no signal to the publisher; enabling `mandatory: true` plus a `BasicReturnAsync` handler would surface these
 - **Publisher confirms** — no `ConfirmSelectAsync`/`WaitForConfirmsOrDieAsync` yet, so the API can't verify the broker actually accepted a published message
-- **Idempotent consumers** — messages carry no ID and workers don't deduplicate, so a redelivered message (e.g. a crash after sending but before acking) would produce a duplicate email/SMS; carrying an idempotency key and skipping already-processed messages would guard against this
+- **Durable idempotency** — the API assigns each message an `Id` and workers skip already-processed messages, but dedup state lives in an in-memory `ProcessedMessageStore`; a worker restart loses it, so a redelivered message after a restart could still produce a duplicate email/SMS — a persistent store (e.g. Redis or a database) would close this gap
 - **Retries for the workers** — failed messages currently dead-letter on first failure for both email and SMS workers; retries (in-process loop or a TTL retry queue) before parking them would be the next step
 - **Connection resilience** — API and workers create a single connection at startup with no reconnection if RabbitMQ goes down
 - **API validation** — no input validation or error responses beyond a 200 OK
