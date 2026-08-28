@@ -16,7 +16,16 @@ public class RabbitMqFixture : IAsyncLifetime
         .WithPassword("admin")
         .Build();
 
-    public FakeLogger<Worker> FakeLogger { get; } = new();
+    public FakeLogger<Worker> FakeLogger { get; }
+
+    private readonly FakeLogger<SmsMessageHandler> SmsMessageHandlerLogger;
+
+    public RabbitMqFixture()
+    {
+        var logCollector = new FakeLogCollector();
+        FakeLogger = new FakeLogger<Worker>(logCollector);
+        SmsMessageHandlerLogger = new FakeLogger<SmsMessageHandler>(logCollector);
+    }
 
     public async Task InitializeAsync()
     {
@@ -31,7 +40,9 @@ public class RabbitMqFixture : IAsyncLifetime
         Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
             .ConfigureServices(services => services.AddHostedService<Worker>())
             .ConfigureServices(services => services.AddSingleton<ProcessedMessageStore>())
+            .ConfigureServices(services => services.AddSingleton<SmsMessageHandler>())
             .ConfigureServices(services => services.AddSingleton<ILogger<Worker>>(FakeLogger))
+            .ConfigureServices(services => services.AddSingleton<ILogger<SmsMessageHandler>>(SmsMessageHandlerLogger))
             .Build();
 
         await Host.StartAsync();

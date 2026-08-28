@@ -1,12 +1,47 @@
-using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
 namespace src;
 
-public class Worker(ProcessedMessageStore processedMessageStore, ILogger<Worker> logger) : BackgroundService
+public class Worker(SmsMessageHandler messageHandler, ILogger<Worker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await using var connection = await CreateConnectionAsync(stoppingToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+
+        await DeclareTopologyAsync(channel, stoppingToken);
+        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
+
+        var consumer = new AsyncEventingBasicConsumer(channel);
+        consumer.ReceivedAsync += async (_, eventArgs) =>
+        {
+            try
+            {
+                var outcome = await messageHandler.HandleAsync(eventArgs.Body.ToArray(), stoppingToken);
+                if (outcome == MessageOutcome.Ack)
+                {
+                    await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
+                }
+                else
+                {
+                    await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to process sms message, sending to dead-letter queue");
+
+                await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
+            }
+        };
+
+        await channel.BasicConsumeAsync(SmsConsumer.QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
+
+        await Task.Delay(Timeout.Infinite, stoppingToken);
+    }
+
+    private static async Task<IConnection> CreateConnectionAsync(CancellationToken stoppingToken)
     {
         var factory = new ConnectionFactory
         {
@@ -16,70 +51,23 @@ public class Worker(ProcessedMessageStore processedMessageStore, ILogger<Worker>
             Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS")!
         };
 
-        await using var connection = await factory.CreateConnectionAsync(stoppingToken);
-        await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
-
-        await DeclareDeadLetterTopologyAsync(channel, stoppingToken);
-        await DeclareSmsTopologyAsync(channel, stoppingToken);
-        
-        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
-        var consumer = new AsyncEventingBasicConsumer(channel);
-        consumer.ReceivedAsync += async (_, eventArgs) =>
-        {
-            try
-            {
-                var body = eventArgs.Body.ToArray();
-                var message = JsonSerializer.Deserialize<Message>(body);
-
-                if (processedMessageStore.IsMessageProcessed(message!.Id))
-                {
-                    logger.LogInformation("Message {Id} has already been processed, skipping", message.Id);
-                    await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
-                    return;
-                }
-
-                // simulate sending SMS
-                await Task.Delay(100, stoppingToken);
-                logger.LogInformation("Message {Id} - Sending SMS to {Mobile}: Dear {FullName}, {Body}",
-                    message!.Id, message.Mobile, message.FullName, message.Body);
-                
-                // store the processed message
-                processedMessageStore.AddMessage(message);
-
-                await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to process sms message, sending to dead-letter queue");
-
-                await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
-            }
-            
-        };
-
-        await channel.BasicConsumeAsync(SmsConsumer.QueueName, autoAck: false, consumer: consumer, cancellationToken: stoppingToken);
-
-        await Task.Delay(Timeout.Infinite, stoppingToken);
+        return await factory.CreateConnectionAsync(stoppingToken);
     }
-    
-    private async Task DeclareSmsTopologyAsync(IChannel channel, CancellationToken stoppingToken)
+
+    private static async Task DeclareTopologyAsync(IChannel channel, CancellationToken stoppingToken)
     {
+        // Exchange that receives published messages
         await channel.ExchangeDeclareAsync(SmsConsumer.ExchangeName, type: SmsConsumer.ExchangeType, durable: SmsConsumer.Durable, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
-        
-        // Declare the queue with dead-letter exchange arguments so that
-        // messages that are negatively acknowledged will be routed to the dead-letter exchange by the broker
-        await channel.QueueDeclareAsync(SmsConsumer.QueueName, durable: SmsConsumer.Durable, exclusive: false, autoDelete: SmsConsumer.AutoDelete, 
-            arguments: new Dictionary<string, object?>()
-            {
-                { "x-dead-letter-exchange", SmsConsumer.DeadLetterExchangeName },
-            },
-            cancellationToken: stoppingToken);
-        await channel.QueueBindAsync(SmsConsumer.QueueName, SmsConsumer.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
-    }
 
-    private async Task DeclareDeadLetterTopologyAsync(IChannel channel, CancellationToken stoppingToken)
-    {
-        // Declare the dead-letter exchange and queue for the sms worker
+        // Queue bound to the exchange, forwarding negative acknowledgements to the dead-letter exchange
+        await channel.QueueDeclareAsync(SmsConsumer.QueueName, durable: SmsConsumer.Durable, exclusive: false, autoDelete: SmsConsumer.AutoDelete,
+            arguments: new Dictionary<string, object?>
+            {
+                ["x-dead-letter-exchange"] = SmsConsumer.DeadLetterExchangeName
+            }, cancellationToken: stoppingToken);
+        await channel.QueueBindAsync(SmsConsumer.QueueName, SmsConsumer.ExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
+
+        // Dead-letter exchange and queue that hold failed messages
         await channel.ExchangeDeclareAsync(SmsConsumer.DeadLetterExchangeName, type: SmsConsumer.ExchangeType, durable: SmsConsumer.Durable, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
         await channel.QueueDeclareAsync(SmsConsumer.DeadLetterQueueName, durable: SmsConsumer.Durable, exclusive: false, autoDelete: SmsConsumer.AutoDelete, cancellationToken: stoppingToken);
         await channel.QueueBindAsync(SmsConsumer.DeadLetterQueueName, SmsConsumer.DeadLetterExchangeName, routingKey: string.Empty, cancellationToken: stoppingToken);
