@@ -11,7 +11,7 @@ public class Worker(SmsMessageHandler messageHandler, ILogger<Worker> logger) : 
         await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
         await DeclareTopologyAsync(channel, stoppingToken);
-        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
+        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 10, global: false, cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, eventArgs) =>

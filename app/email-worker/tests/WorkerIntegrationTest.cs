@@ -82,6 +82,57 @@ public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper te
         var store = fixture.Host.Services.GetRequiredService<ProcessedMessageStore>();
         store.GetMessages().Should().ContainSingle(m => m == message.Id);
     }
+    
+    [Fact]
+    public async Task OnReceived_WhenConcurrentIdenticalValidMessage_OnlyProcessesOnce()
+    {
+        await using var connection = await CreateConnectionAsync();
+
+        await WaitForWorkerReadyAsync(connection);
+
+        // Publish a message to the exchange the Worker is consuming from
+        await using var pubChannel = await connection.CreateChannelAsync();
+        var message = new Message()
+        {
+            Id = Guid.NewGuid().ToString(),
+            FullName = "John Doe",
+            Body = "Hello, this is a test message.",
+            Mobile = "0434567890",
+            Email = "idempotent_example@gmail.com"
+        };
+        var body = JsonSerializer.SerializeToUtf8Bytes(message);
+        
+        // Deliver the same message concurrently five times to simulate concurrent identical deliveries
+        var publishTasks = Enumerable.Range(0, 5)
+            .Select(_ => pubChannel.BasicPublishAsync(exchange: EmailConsumer.ExchangeName, routingKey: "", body: body))
+            .ToArray();
+        foreach (var publishTask in publishTasks)
+        {
+            await publishTask;
+        }
+
+        // Wait until all five concurrent deliveries have been handled: the first
+        // one sends the email, the remaining four are deduplicated
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            var logCount = fixture.FakeLogger.Collector.GetSnapshot().Count(r => r.Message.Contains(message.Id));
+            if (logCount >= 5) break;
+            await Task.Delay(300);
+        }
+
+        //Assert that only one email was sent and the rest were skipped
+        fixture.FakeLogger.Collector.GetSnapshot()
+            .Count(r => r.Message.Contains(message.Id) && r.Message.Contains($"Sending email to {message.Email}"))
+            .Should().Be(1, "a previously processed message must not be sent again");
+        fixture.FakeLogger.Collector.GetSnapshot()
+            .Count(r => r.Message.Contains(message.Id) && r.Message.Contains("has already been processed, skipping"))
+            .Should().Be(4, "four of the five concurrent deliveries must be deduplicated");
+        
+        
+        var store = fixture.Host.Services.GetRequiredService<ProcessedMessageStore>();
+        store.GetMessages().Should().ContainSingle(m => m == message.Id);
+    }
 
     [Fact]
     public async Task OnReceived_WhenPoisonMessage_MessageGoesToDeadLetterQueue()

@@ -4,6 +4,8 @@ namespace src;
 
 public class SmsMessageHandler(ProcessedMessageStore processedMessageStore, ILogger<SmsMessageHandler> logger)
 {
+    // Ensure that only one message is processed at a time to avoid race conditions with the processed message store.
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
     public async Task<MessageOutcome> HandleAsync(byte[] body, CancellationToken stoppingToken)
     {
         var message = JsonSerializer.Deserialize<Message>(body);
@@ -18,24 +20,34 @@ public class SmsMessageHandler(ProcessedMessageStore processedMessageStore, ILog
             logger.LogWarning("Received message with missing required fields, sending to dead-letter queue");
             return MessageOutcome.Nack;
         }
-
-        // Skip messages that have already been processed so a redelivered
-        // message does not produce a duplicate SMS
-        if (processedMessageStore.IsMessageProcessed(message.Id))
+        
+        // Wait for the semaphore to ensure that only one message is processed at a time
+        await _semaphore.WaitAsync(stoppingToken);
+        try
         {
-            logger.LogInformation("Message {Id} has already been processed, skipping", message.Id);
+            // Skip messages that have already been processed so a redelivered
+            // message does not produce a duplicate SMS
+            if (processedMessageStore.IsMessageProcessed(message.Id))
+            {
+                logger.LogInformation("Message {Id} has already been processed, skipping", message.Id);
+                return MessageOutcome.Ack;
+            }
+
+            // simulate sending SMS
+            await Task.Delay(100, stoppingToken);
+            logger.LogInformation("Message {Id} - Sending SMS to {Mobile}: Dear {FullName}, {Body}",
+                message.Id, message.Mobile, message.FullName, message.Body);
+
+            // store the processed message
+            processedMessageStore.AddMessage(message);
+
             return MessageOutcome.Ack;
         }
-
-        // simulate sending SMS
-        await Task.Delay(100, stoppingToken);
-        logger.LogInformation("Message {Id} - Sending SMS to {Mobile}: Dear {FullName}, {Body}",
-            message.Id, message.Mobile, message.FullName, message.Body);
-
-        // store the processed message
-        processedMessageStore.AddMessage(message);
-
-        return MessageOutcome.Ack;
+        finally
+        {
+            // Release the semaphore to allow the next message to be processed
+            _semaphore.Release();
+        }
     }
 
     private static bool HasMissingRequiredFields(Message message) =>
