@@ -130,7 +130,9 @@ Requires the app to be running locally.
 - **Publisher confirms** — no `ConfirmSelectAsync`/`WaitForConfirmsOrDieAsync` yet, so the API can't verify the broker actually accepted a published message
 - **Durable idempotency** — the API assigns each message an `Id` and workers skip already-processed messages (a `SemaphoreSlim` in each handler also makes the check-then-store path safe against concurrent identical deliveries), but dedup state lives in an in-memory `ProcessedMessageStore`; a worker restart loses it, so a redelivered message after a restart could still produce a duplicate email/SMS — a persistent store (e.g. Redis or a database) would close this gap
 - **Retries for the workers** — failed messages currently dead-letter on first failure for both email and SMS workers; retries (in-process loop or a TTL retry queue) before parking them would be the next step
+- **Single-command startup** — starting the stack currently takes four separate terminals (RabbitMQ, API, workers, UI); a startup script (e.g. `start.ps1`/`start.sh`) or a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/get-started/dotnet-aspire) app host that orchestrates the API, workers, UI, and RabbitMQ would bring everything up with one command
 - **Connection resilience** — API and workers create a single connection at startup with no reconnection if RabbitMQ goes down
 - **API validation** — no input validation or error responses beyond a 200 OK
 - **UI error handling** — only checks `response.ok`; no loading state, no error display
+- **Processing status in the UI** — there's no way to see whether workers actually processed a submitted message; you have to check the workers' console logs. Publishing a "message processed" event back to the API (or having the API poll worker state) and showing per-message status in the UI would close this loop
 - **OpenTelemetry** — distributed tracing across API and workers for observability
