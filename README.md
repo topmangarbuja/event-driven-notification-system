@@ -40,11 +40,33 @@ flowchart LR
 
 - [Docker](https://docs.docker.com/get-docker/)
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- [Node.js](https://nodejs.org/) (for the UI)
+- [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/) (for the UI and the app host)
+- [.NET Aspire CLI](https://learn.microsoft.com/dotnet/aspire/get-started/tooling) (`aspire` command)
 
 ## Run Locally
 
-### 1. Start RabbitMQ
+### Everything at once (Aspire app host)
+
+```bash
+cd aspire-apphost
+pnpm install
+pnpm run dev
+```
+
+This starts RabbitMQ, the API, both workers, and the UI, and opens the Aspire dashboard, which lists every service, its endpoint URLs, and its logs.
+
+A few notes on the ports in this mode:
+
+- The **UI is pinned to `http://localhost:5173`** so the URL is stable and bookmarkable. Set `UI_PORT` to move it (e.g. `UI_PORT=5273 pnpm run dev`), which is also how you run a second stack alongside this one.
+- The **API and RabbitMQ ports are allocated dynamically** — read them from the dashboard rather than assuming a fixed port. In particular the RabbitMQ management UI is *not* on `15672` in this mode.
+- The API's own port is fixed by the `http` launch profile (`app/api/src/Properties/launchSettings.json`); the Aspire dashboard shows the proxied address to use.
+- End-to-end tests need no configuration: `e2e/playwright.config.ts` defaults to `http://localhost:5173`, which is the pinned UI port.
+
+### Running services individually
+
+Use this when you want to run a single service in isolation, or to step through the wiring by hand. Note that this path uses `docker compose` and therefore *different* ports than the Aspire mode above.
+
+#### 1. Start RabbitMQ
 
 ```bash
 docker compose up -d
@@ -52,7 +74,7 @@ docker compose up -d
 
 RabbitMQ management UI will be available at `http://localhost:15672` (user: `user`, password: `password`).
 
-### 2. Run the API
+#### 2. Run the API
 
 ```bash
 cd app/api/src
@@ -61,7 +83,7 @@ dotnet run
 
 The API starts at `http://localhost:5139`.
 
-### 3. Run the Workers
+#### 3. Run the Workers
 
 In separate terminals:
 
@@ -77,7 +99,7 @@ cd app/sms-worker/src
 dotnet run
 ```
 
-### 4. Run the UI
+#### 4. Run the UI
 
 ```bash
 cd app/ui
@@ -122,7 +144,9 @@ cd e2e
 pnpm test
 ```
 
-Requires the app to be running locally.
+Requires the app to be running locally. Works against either run mode: the Aspire app host
+serves the UI on the pinned `http://localhost:5173`, which is what `e2e/playwright.config.ts`
+defaults to. Set `E2E_BASE_URL` to point the tests at a different address.
 
 ## Possible Enhancements
 
@@ -130,7 +154,6 @@ Requires the app to be running locally.
 - **Publisher confirms** — no `ConfirmSelectAsync`/`WaitForConfirmsOrDieAsync` yet, so the API can't verify the broker actually accepted a published message
 - **Durable idempotency** — the API assigns each message an `Id` and workers skip already-processed messages (a `SemaphoreSlim` in each handler also makes the check-then-store path safe against concurrent identical deliveries), but dedup state lives in an in-memory `ProcessedMessageStore`; a worker restart loses it, so a redelivered message after a restart could still produce a duplicate email/SMS — a persistent store (e.g. Redis or a database) would close this gap
 - **Retries for the workers** — failed messages currently dead-letter on first failure for both email and SMS workers; retries (in-process loop or a TTL retry queue) before parking them would be the next step
-- **Single-command startup** — starting the stack currently takes four separate terminals (RabbitMQ, API, workers, UI); a startup script (e.g. `start.ps1`/`start.sh`) or a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/get-started/dotnet-aspire) app host that orchestrates the API, workers, UI, and RabbitMQ would bring everything up with one command
 - **Connection resilience** — API and workers create a single connection at startup with no reconnection if RabbitMQ goes down
 - **API validation** — no input validation or error responses beyond a 200 OK
 - **UI error handling** — only checks `response.ok`; no loading state, no error display
