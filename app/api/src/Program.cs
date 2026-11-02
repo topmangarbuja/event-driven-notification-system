@@ -1,9 +1,12 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using RabbitMQ.Client;
 using src;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddOpenTelemetryConfiguration();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -43,14 +46,30 @@ app.MapPost("/api/messages", async([FromBody] SendMessagesRequest request, Messa
     var basicProperties = new BasicProperties()
     {
         Persistent = true,
-        ContentType = "application/json"
+        ContentType = "application/json",
+        MessageId = message.Id
     };
-    
-    await channel.BasicPublishAsync(exchange: Producer.ExchangeName, 
-        routingKey: string.Empty, 
-        mandatory: false,
-        basicProperties: basicProperties,
-        body: body);
+
+    using var publishActivity = MessageTracing.ActivitySource.StartActivity("publish", ActivityKind.Producer);
+    publishActivity?.SetTag("messaging.system", "rabbitmq");
+    publishActivity?.SetTag("messaging.destination.name", Producer.ExchangeName);
+    publishActivity?.SetTag("messaging.operation.type", "send");
+    publishActivity?.SetTag("messaging.message.id", message.Id);
+    basicProperties.Headers = MessageTracing.CreateHeaders(Activity.Current);
+
+    try
+    {
+        await channel.BasicPublishAsync(exchange: Producer.ExchangeName,
+            routingKey: string.Empty,
+            mandatory: false,
+            basicProperties: basicProperties,
+            body: body);
+    }
+    catch (Exception ex)
+    {
+        publishActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+        throw;
+    }
     
     logger.LogInformation("Message {Id} sent to exchange {Exchange} for {FullName} ({Email}, {Mobile})", message.Id, Producer.ExchangeName, message.FullName, message.Email, message.Mobile);
     

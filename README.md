@@ -109,6 +109,12 @@ pnpm run dev
 
 The UI starts at `http://localhost:5173`. Open it in your browser, fill in the form, and submit a message.
 
+### Distributed Tracing
+
+The API creates HTTP and RabbitMQ publish spans; the email and SMS workers create consumer spans. W3C trace context is carried in RabbitMQ headers, so each worker's processing span appears as a child of the publish span.
+
+When running through the Aspire app host, open the Aspire dashboard's **Traces** view to inspect a submitted message's trace across the API and workers. When running services individually, set `OTEL_EXPORTER_OTLP_ENDPOINT` in each service's environment to an OTLP collector endpoint (for example, `http://localhost:4317`). Standalone services export traces only when this variable is set.
+
 ### Verify
 
 Look at the console logs of the API and workers to confirm messages are being published and processed.
@@ -158,4 +164,3 @@ defaults to. Set `E2E_BASE_URL` to point the tests at a different address.
 - **API validation** — no input validation or error responses beyond a 200 OK
 - **UI error handling** — only checks `response.ok`; no loading state, no error display
 - **Processing status in the UI** — there's no way to see whether workers actually processed a submitted message; you have to check the workers' console logs. Publishing a "message processed" event back to the API (or having the API poll worker state) and showing per-message status in the UI would close this loop
-- **OpenTelemetry** — distributed tracing across API and workers for observability

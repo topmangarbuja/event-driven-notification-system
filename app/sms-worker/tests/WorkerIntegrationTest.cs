@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
@@ -12,6 +13,57 @@ namespace tests;
 
 public class WorkerIntegrationTest(RabbitMqFixture fixture, ITestOutputHelper testOutputHelper) : IClassFixture<RabbitMqFixture>
 {
+    [Fact]
+    public async Task OnReceived_WhenTraceContextProvided_CreatesConsumerSpan()
+    {
+        var processActivitySource = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var activityListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == MessageTracing.ActivitySourceName,
+            Sample = (ref _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity =>
+            {
+                if (activity.GetTagItem("messaging.message.id")?.ToString() == "trace-test")
+                {
+                    processActivitySource.TrySetResult(activity);
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(activityListener);
+
+        using var parent = new Activity("upstream");
+        parent.SetIdFormat(ActivityIdFormat.W3C);
+        parent.Start();
+        var expectedTraceId = parent.TraceId;
+        var expectedParentSpanId = parent.SpanId;
+        var headers = MessageTracing.CreateHeaders(parent);
+        parent.Stop();
+
+        await using var connection = await CreateConnectionAsync();
+        await WaitForWorkerReadyAsync(connection);
+
+        var message = new Message
+        {
+            Id = "trace-test",
+            FullName = "John Doe",
+            Body = "Trace propagation test",
+            Mobile = "0400111222",
+            Email = "trace@example.com"
+        };
+        await using var pubChannel = await connection.CreateChannelAsync();
+        var properties = new BasicProperties { Headers = headers, MessageId = message.Id };
+        await pubChannel.BasicPublishAsync(
+            exchange: SmsConsumer.ExchangeName,
+            routingKey: string.Empty,
+            mandatory: false,
+            basicProperties: properties,
+            body: JsonSerializer.SerializeToUtf8Bytes(message));
+
+        var processActivity = await processActivitySource.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        processActivity.Kind.Should().Be(ActivityKind.Consumer);
+        processActivity.TraceId.Should().Be(expectedTraceId);
+        processActivity.ParentSpanId.Should().Be(expectedParentSpanId);
+    }
 
     [Fact]
     public async Task OnReceived_WhenValidMessage_LogsAndStoresIt()

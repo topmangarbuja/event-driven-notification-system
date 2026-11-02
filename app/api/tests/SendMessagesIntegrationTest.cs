@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
@@ -49,6 +50,7 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
             Mobile: "0434567890",
             Email: "example@gmail.com"
         ));
+        request.Headers.TryAddWithoutValidation("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
         
         var factory = new ConnectionFactory()
         {
@@ -82,6 +84,11 @@ public class SendMessagesIntegrationTest(RabbitMqFixture fixture): IClassFixture
 
         delivered.Should().NotBeNull("the API must publish the message to the exchange");
         delivered!.BasicProperties.Persistent.Should().BeTrue();
+        var traceContext = MessageTracing.ExtractContext(delivered.BasicProperties.Headers);
+        traceContext.TraceId.ToHexString().Should().Be("4bf92f3577b34da6a3ce929d0e0e4736");
+        traceContext.SpanId.ToHexString().Should().NotBe("00f067aa0ba902b7");
+        traceContext.TraceFlags.Should().Be(ActivityTraceFlags.Recorded);
+        traceContext.IsRemote.Should().Be(true);
 
         var body = delivered.Body.ToArray();
         var message = JsonSerializer.Deserialize<Message>(body);

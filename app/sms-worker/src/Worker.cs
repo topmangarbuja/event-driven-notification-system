@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -16,6 +17,13 @@ public class Worker(SmsMessageHandler messageHandler, ILogger<Worker> logger) : 
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, eventArgs) =>
         {
+            var parentContext = MessageTracing.ExtractContext(eventArgs.BasicProperties.Headers);
+            using var processActivity = MessageTracing.ActivitySource.StartActivity("process", ActivityKind.Consumer, parentContext);
+            processActivity?.SetTag("messaging.system", "rabbitmq");
+            processActivity?.SetTag("messaging.destination.name", SmsConsumer.QueueName);
+            processActivity?.SetTag("messaging.operation.type", "process");
+            processActivity?.SetTag("messaging.message.id", eventArgs.BasicProperties.MessageId);
+
             try
             {
                 var outcome = await messageHandler.HandleAsync(eventArgs.Body.ToArray(), stoppingToken);
@@ -25,11 +33,13 @@ public class Worker(SmsMessageHandler messageHandler, ILogger<Worker> logger) : 
                 }
                 else
                 {
+                    processActivity?.SetStatus(ActivityStatusCode.Error, "Message rejected and dead-lettered");
                     await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
                 }
             }
             catch (Exception ex)
             {
+                processActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 logger.LogError(ex, "Failed to process sms message, sending to dead-letter queue");
 
                 await channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);

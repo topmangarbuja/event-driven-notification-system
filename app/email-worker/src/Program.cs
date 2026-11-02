@@ -1,6 +1,9 @@
 using src;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.AddOpenTelemetryConfiguration();
+
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddSingleton<ProcessedMessageStore>();
 builder.Services.AddSingleton<EmailMessageHandler>();
