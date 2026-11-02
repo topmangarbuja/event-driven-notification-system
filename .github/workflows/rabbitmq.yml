@@ -1,11 +1,7 @@
 name: RabbitMQ
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - "rabbitmq/**"
-      - ".github/workflows/rabbitmq.yml"
+  workflow_dispatch:
 
 jobs:
   deploy-development:
