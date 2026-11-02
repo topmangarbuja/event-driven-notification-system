@@ -3,6 +3,7 @@
 > [!NOTE]
 > This is a **learning/demo project** showcasing RabbitMQ messaging patterns with .NET.
 > See [Possible Enhancements](#possible-enhancements) for known gaps and planned improvements.
+> The CI/CD workflows deploy the demo to a single development environment on Railway to keep hosting costs down. The architecture and workflows can be extended to deploy separate development, staging, and production environments when needed.
 
 A **learning-oriented** .NET 10 demo application using RabbitMQ for message brokering with an API, email/SMS workers, and a React UI.
 
